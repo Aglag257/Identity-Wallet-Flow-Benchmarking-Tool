@@ -3,6 +3,7 @@
 
 This is a benchmarking tool, as a result many implementation details were though of as out of scope, so there are some deviations from the original protocols that were not computationally different between the flows, so no difference in our case
 
+Or we omit the nonce endpoint or the credential configuration id's etc
 
 To run in an android:
 
