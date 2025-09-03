@@ -7,11 +7,11 @@ services:
       HOST: 0.0.0.0
       ISSUER_PORT: 4000
       VERIFIER_PORT: 5000
-      WALLET_PORT: 6000
+      WALLET_PORT: 7000
     ports:
       - "4000:4000"
       - "5000:5000"
-      - "6000:6000"
+      - "7000:7000"
     profiles: ["revised"]
 
   json-bbs-plus:
