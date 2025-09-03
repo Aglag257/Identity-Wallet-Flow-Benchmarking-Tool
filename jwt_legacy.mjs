@@ -8,9 +8,18 @@ import { createHash, webcrypto } from "node:crypto";
 
 // globalThis.crypto = webcrypto;
 const crypto = webcrypto;
-const ITERATIONS = Number(process.env.ITER ?? 50);          // #runs
-const HOST = "127.0.0.1", ISSUER_PORT = 4000,
-      VERIFIER_PORT = 5000, WALLET_PORT = 6000;
+
+const ITERATIONS   = Number(process.env.ITER ?? 50);          // #runs
+const BIND = process.env.HOST ?? "127.0.0.1";
+const LOCAL = "127.0.0.1";
+
+const ISSUER_PORT   = Number(process.env.ISSUER_PORT   ?? 4000);
+const VERIFIER_PORT = Number(process.env.VERIFIER_PORT ?? 5000);
+const WALLET_PORT   = Number(process.env.WALLET_PORT   ?? 6000);
+
+const ISSUER_BASE   = process.env.ISSUER_BASE_URL   ?? `http://${LOCAL}:${ISSUER_PORT}`;
+const VERIFIER_BASE = process.env.VERIFIER_BASE_URL ?? `http://${LOCAL}:${VERIFIER_PORT}`;
+
 const CREDENTIAL_TYPE = "UniversityDegreeCredential";
 
 /*  Experiment grid  */
@@ -71,7 +80,7 @@ async function main(){
     const pin = String(Math.floor(100000 + Math.random()*900000)); 
     preAuthCodes[code] = { subject, pin };
     res.json({
-      credential_issuer:`http://${HOST}:${ISSUER_PORT}`,
+      credential_issuer: ISSUER_BASE,
       grants:{ "urn:ietf:params:oauth:grant-type:pre-authorized_code":
                { "pre-authorized_code":code, user_pin_required:true } },
       tx_code: pin                                       
@@ -116,7 +125,7 @@ async function main(){
     }catch(e){
       return res.status(400).json({error:"invalid_proof", error_description:e.message});
     }
-    if(proof.aud !== `http://${HOST}:${ISSUER_PORT}`) {
+    if(proof.aud !== ISSUER_BASE) {
       return res.status(400).json({error:"invalid_proof", error_description:"aud mismatch"});
     }
     if(proof.nonce !== cnonce){
@@ -136,7 +145,7 @@ async function main(){
     const _sd = disclosures.map(digestDisclosure);
 
     const jwt = await new SignJWT({
-      iss:`http://${HOST}:${ISSUER_PORT}`,
+      iss: ISSUER_BASE,
       sub:subject,
       iat:Math.floor(Date.now()/1000),
       exp:Math.floor(Date.now()/1000+3600),
@@ -155,7 +164,7 @@ async function main(){
     res.json(cred);
   });
 
-  issuer.listen(ISSUER_PORT,HOST,()=>console.log(`[issuer]  → http://${HOST}:${ISSUER_PORT}`));
+  issuer.listen(ISSUER_PORT, BIND,()=>console.log(`[issuer]  → bind http://${BIND}:${ISSUER_PORT} (internal ${ISSUER_BASE})`));
 
   /* ── VERIFIER ───────────────────────────────────────────── */
   const verifier = express().use(express.json());
@@ -191,7 +200,7 @@ async function main(){
       const { payload: kb } = await jwtVerify(kb_jwt, holderPub);
 
       // 4) Validate audience, nonce, and sd_hash
-      if(kb.aud !== `http://${HOST}:${VERIFIER_PORT}`) throw new Error("kb_aud");
+      if(kb.aud !== VERIFIER_BASE) throw new Error("kb_aud");
       if(!verifierNonces[kb.nonce]) throw new Error("kb_nonce");
       delete verifierNonces[kb.nonce];
 
@@ -215,7 +224,7 @@ async function main(){
     res.json({nonce:n});
   });
 
-  verifier.listen(VERIFIER_PORT,HOST,()=>console.log(`[verifier] → http://${HOST}:${VERIFIER_PORT}`));
+  verifier.listen(VERIFIER_PORT,BIND,()=>console.log(`[verifier] → bind http://${BIND}:${VERIFIER_PORT} (internal ${VERIFIER_BASE})`));
 
   /* ── WALLET (driver) ───────────────────────────────────── */
   const wallet = express().use(express.json());
@@ -225,7 +234,7 @@ async function main(){
     const revealRatio = Math.min(1, Math.max(0, Number(_req.body?.revealRatio ?? 0.2)));
 
 
-    const offer = await fetch(`http://${HOST}:${ISSUER_PORT}/credential-offer`).then(r=>r.json());
+    const offer = await fetch(`${ISSUER_BASE}/credential-offer`).then(r=>r.json());
     const code  = offer.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"]["pre-authorized_code"];
 
     const params = new URLSearchParams({                    
@@ -269,7 +278,7 @@ async function main(){
 
     runStats.vcBytes.push(Buffer.byteLength(JSON.stringify(vc)));
 
-    const { nonce } = await fetch(`http://${HOST}:${VERIFIER_PORT}/nonce`).then(r=>r.json());
+    const { nonce } = await fetch(`${VERIFIER_BASE}/nonce`).then(r=>r.json());;
 
     // Build SD-JWT+KB
     const sdForHash = vc.credential + "~" + selectedDisclosures.join("~") + "~";
@@ -277,7 +286,7 @@ async function main(){
 
     const kbJwt = await new SignJWT({
       nonce,
-      aud: `http://${HOST}:${VERIFIER_PORT}`,
+      aud: VERIFIER_BASE,
       iat: Math.floor(Date.now()/1000),
       sd_hash
     }).setProtectedHeader({ alg:"ES256", typ:"kb+jwt" })
@@ -286,7 +295,7 @@ async function main(){
     const payloadSize = Buffer.byteLength(kbJwt) +
       Buffer.byteLength(vc.credential) + Buffer.byteLength(selectedDisclosures.join(""));
     runStats.payload.push(payloadSize);
-    const verification = await fetch(`http://${HOST}:${VERIFIER_PORT}/verify`,{
+    const verification = await fetch(`${VERIFIER_BASE}/verify`,{
       method:"POST",headers:{ "content-type":"application/json" },
       body:JSON.stringify({ credential: vc.credential, disclosures: selectedDisclosures, kb_jwt: kbJwt })
     }).then(r=>r.json());
@@ -298,8 +307,8 @@ async function main(){
     
     res.json({verification});
   });
-  wallet.listen(WALLET_PORT,HOST,()=>{
-    console.log(`[wallet]  → http://${HOST}:${WALLET_PORT}`);
+  wallet.listen(WALLET_PORT,BIND,()=>{
+    console.log(`[wallet]  → bind http://${BIND}:${WALLET_PORT} (driver on http://${LOCAL}:${WALLET_PORT})`);
     runBenchmark().catch(e=>{console.error(e);process.exit(1);});
   });
 }

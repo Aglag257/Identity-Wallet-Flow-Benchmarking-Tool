@@ -14,10 +14,12 @@ import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
 /*  Tunables  */
-const BIND  = "0.0.0.0"; 
+const BIND  = process.env.HOST ?? "127.0.0.1";
 const LOCAL = "127.0.0.1";
-const ISSUER_PORT = 4000, VERIFIER_PORT = 5000, WALLET_PORT = 7000;
-const ITER = Number(process.env.ITER ?? 50);
+const ISSUER_PORT   = Number(process.env.ISSUER_PORT   ?? 4000);
+const VERIFIER_PORT = Number(process.env.VERIFIER_PORT ?? 5000);
+const WALLET_PORT   = Number(process.env.WALLET_PORT   ?? 7000);
+const ITER          = Number(process.env.ITER          ?? 50);
 const url = (port, path) => `http://${LOCAL}:${port}${path}`;
 
 /*  Experiment grid  */
@@ -196,7 +198,7 @@ async function startIssuer(port=ISSUER_PORT){
   app.use((req,res)=>res.status(404).json({error:"not_found", path:req.url, method:req.method}));
 
   return new Promise((ok)=>app.listen(port,BIND,()=>{
-    console.log(`[issuer]   → http://${LOCAL}:${ISSUER_PORT}`);
+    console.log(`[issuer]   → http://${BIND}:${port} (internal http://${LOCAL}:${ISSUER_PORT})`);
     ok();
   }));
 }
@@ -244,7 +246,7 @@ async function startVerifier(port=VERIFIER_PORT){
   app.use((req,res)=>res.status(404).json({error:"not_found", path:req.url, method:req.method}));
 
   return new Promise((ok)=>app.listen(port,BIND,()=>{
-    console.log(`[verifier] → http://${LOCAL}:${VERIFIER_PORT}`);
+    console.log(`[verifier] → http://${BIND}:${port} (internal http://${LOCAL}:${VERIFIER_PORT})`);
     ok();
   }));
 }
@@ -368,7 +370,7 @@ async function startWallet(port=WALLET_PORT){
   app.use((req,res)=>res.status(404).json({error:"not_found", path:req.url, method:req.method}));
 
   return new Promise((ok)=>app.listen(port,BIND,()=>{
-    console.log(`[wallet]   → http://${LOCAL}:${WALLET_PORT}`);
+    console.log(`[wallet]   → http://${BIND}:${port} (internal http://${LOCAL}:${WALLET_PORT})`);
     ok();
   }));
 }
