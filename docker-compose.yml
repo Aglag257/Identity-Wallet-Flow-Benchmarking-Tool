@@ -1,0 +1,45 @@
+services:
+  json-bbs-revised:
+    build: .
+    image: wallet-bench:local
+    command: ["jsonBbsRevised.mjs"]
+    environment:
+      HOST: 0.0.0.0
+      ISSUER_PORT: 4000
+      VERIFIER_PORT: 5000
+      WALLET_PORT: 6000
+    ports:
+      - "4000:4000"
+      - "5000:5000"
+      - "6000:6000"
+    profiles: ["revised"]
+
+  json-bbs-plus:
+    build: .
+    image: wallet-bench:local
+    command: ["jsonBbsPlus.mjs"]
+    environment:
+      HOST: 0.0.0.0
+      ISSUER_PORT: 4100
+      VERIFIER_PORT: 5100
+      WALLET_PORT: 6100
+    ports:
+      - "4100:4100"
+      - "5100:5100"
+      - "6100:6100"
+    profiles: ["plus"]
+
+  jwt-legacy:
+    build: .
+    image: wallet-bench:local
+    command: ["jwt_legacy.mjs"]
+    environment:
+      HOST: 0.0.0.0
+      ISSUER_PORT: 4200
+      VERIFIER_PORT: 5200
+      WALLET_PORT: 6200
+    ports:
+      - "4200:4200"
+      - "5200:5200"
+      - "6200:6200"
+    profiles: ["legacy"]
