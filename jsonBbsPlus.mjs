@@ -13,6 +13,9 @@ import {
 import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
+import fs from "node:fs";
+
+
 /*  Tunables  */
 const BIND  = process.env.HOST ?? "127.0.0.1";
 const LOCAL = "127.0.0.1";
@@ -25,6 +28,16 @@ const url = (port, path) => `http://${LOCAL}:${port}${path}`;
 /*  Experiment grid  */
 const ATTR_COUNTS   = [5, 6, 7, 8, 9, 10];
 const REVEAL_RATIOS = [0.20, 0.40, 0.60, 0.80, 1.00];
+
+const IMPL_NAME   = process.env.IMPL_NAME ?? "json-bbs-plus";  
+const RESULTS_DIR = process.env.RESULTS_DIR ?? "./results";
+const RESULTS_FILE = `${RESULTS_DIR}/benchmarks.jsonl`;
+fs.mkdirSync(RESULTS_DIR, { recursive: true });
+
+function writeRow(row) {
+  fs.appendFileSync(RESULTS_FILE, JSON.stringify(row) + "\n", "utf8");
+}
+const last = (a) => (a && a.length ? a[a.length - 1] : null);
 
 function resetStats() {
   M.issuer.t.length = 0;   M.issuer.cpu.length = 0;
@@ -364,6 +377,25 @@ async function startWallet(port=WALLET_PORT){
     M.wallet.t.push(performance.now()-t0);
     M.wallet.cpu.push((user + system) / 1000);
 
+    writeRow({
+      type: "run",
+      impl: IMPL_NAME,
+      attrCount,
+      revealRatio,
+      metrics: {
+        issuer_ms:   last(M.issuer.t),
+        wallet_ms:   last(M.wallet.t),
+        verifier_ms: last(M.verifier.t),
+
+        issuer_cpu_ms:   last(M.issuer.cpu),
+        wallet_cpu_ms:   last(M.wallet.cpu),
+        verifier_cpu_ms: last(M.verifier.cpu),
+
+        payload_present_bytes: last(M.payload),
+        vc_size_bytes:         last(M.vcBytes)
+      }
+    });
+
     res.json({ verified: ok.verified, vcBytes: JSON.stringify(credRes).length });
   });
 
@@ -395,23 +427,54 @@ async function runBenchmark(){
         if ((i+1) % 10 === 0) console.log(`✓ completed ${i+1}/${ITER}`);
       }
 
-      const make=(k,v)=>({[k]:{
-        mean:v.mean.toFixed(2), std:v.std.toFixed(2),
-        median:v.median.toFixed(2), min:v.min.toFixed(2), max:v.max.toFixed(2)
-      }});
-      const rows={
-        ...make("Issuer time (ms)", stats(M.issuer.t)),
-        ...make("Wallet time (ms)", stats(M.wallet.t)),
-        ...make("Verifier time (ms)", stats(M.verifier.t)),
-        ...make("Issuer CPU (ms)", stats(M.issuer.cpu)),
-        ...make("Wallet CPU (ms)", stats(M.wallet.cpu)),
-        ...make("Verifier CPU (ms)", stats(M.verifier.cpu)),
-        ...make("Payload bytes", stats(M.payload)),
-        ...make("VC bytes", stats(M.vcBytes))
+      const S = {
+        issuer_ms:             stats(M.issuer.t),
+        wallet_ms:             stats(M.wallet.t),
+        verifier_ms:           stats(M.verifier.t),
+        issuer_cpu_ms:         stats(M.issuer.cpu),
+        wallet_cpu_ms:         stats(M.wallet.cpu),
+        verifier_cpu_ms:       stats(M.verifier.cpu),
+        payload_present_bytes: stats(M.payload),
+        vc_size_bytes:         stats(M.vcBytes)
+      };
+
+      const fmt = (s) => ({
+        mean:   s.mean.toFixed(2),
+        std:    s.std.toFixed(2),
+        median: s.median.toFixed(2),
+        min:    s.min.toFixed(2),
+        max:    s.max.toFixed(2)
+      });
+      const rows = {
+        "Issuer time (ms)":  fmt(S.issuer_ms),
+        "Wallet time (ms)":  fmt(S.wallet_ms),
+        "Verifier time (ms)":fmt(S.verifier_ms),
+        "Issuer CPU (ms)":   fmt(S.issuer_cpu_ms),
+        "Wallet CPU (ms)":   fmt(S.wallet_cpu_ms),
+        "Verifier CPU (ms)": fmt(S.verifier_cpu_ms),
+        "Payload bytes":     fmt(S.payload_present_bytes),
+        "VC bytes":          fmt(S.vc_size_bytes)
       };
 
       console.log(`\n======== Results for attrCount=${A}, reveal=${Math.round(R*100)}% ========\n`);
       console.table(rows);
+      writeRow({
+        type: "summary",
+        impl: IMPL_NAME,
+        attrCount: A,
+        revealRatio: R,
+        metrics: {
+          issuer_ms:             S.issuer_ms.mean,
+          wallet_ms:             S.wallet_ms.mean,
+          verifier_ms:           S.verifier_ms.mean,
+          issuer_cpu_ms:         S.issuer_cpu_ms.mean,
+          wallet_cpu_ms:         S.wallet_cpu_ms.mean,
+          verifier_cpu_ms:       S.verifier_cpu_ms.mean,
+          payload_present_bytes: S.payload_present_bytes.mean,
+          vc_size_bytes:         S.vc_size_bytes.mean
+        }
+      });
+
 
       summary.push({
         attrCount: A,
