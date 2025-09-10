@@ -6,6 +6,8 @@ import fetch from "node-fetch";
 import { performance } from "node:perf_hooks";
 import { createHash, webcrypto } from "node:crypto";
 
+import fs from "node:fs";  
+
 // globalThis.crypto = webcrypto;
 const crypto = webcrypto;
 
@@ -21,6 +23,20 @@ const ISSUER_BASE   = process.env.ISSUER_BASE_URL   ?? `http://${LOCAL}:${ISSUER
 const VERIFIER_BASE = process.env.VERIFIER_BASE_URL ?? `http://${LOCAL}:${VERIFIER_PORT}`;
 
 const CREDENTIAL_TYPE = "UniversityDegreeCredential";
+
+//  Results logging config
+const IMPL_NAME   = process.env.IMPL_NAME ?? "json-bbs-revised";
+const RESULTS_DIR = process.env.RESULTS_DIR ?? "./results";
+const RESULTS_FILE = `${RESULTS_DIR}/benchmarks.jsonl`;
+fs.mkdirSync(RESULTS_DIR, { recursive: true });
+
+function writeRow(row) {
+  fs.appendFileSync(RESULTS_FILE, JSON.stringify(row) + "\n", "utf8");
+}
+
+function last(a) {
+  return a && a.length ? a[a.length - 1] : null;
+}
 
 /*  Experiment grid  */
 const ATTR_COUNTS   = [5, 6, 7, 8, 9, 10];
@@ -305,7 +321,33 @@ async function main(){
 
     runStats.wallet.cpu.push((cpu.user + cpu.system) / 1000); // ms
     
+
+
+
+
+
+    writeRow({
+      type: "run",
+      impl: IMPL_NAME,
+      attrCount,
+      revealRatio,
+      metrics: {
+        issuer_ms:   last(runStats.issuer.t),
+        wallet_ms:   last(runStats.wallet.t),
+        verifier_ms: last(runStats.verifier.t),
+
+        issuer_cpu_ms:   last(runStats.issuer.cpu),
+        wallet_cpu_ms:   last(runStats.wallet.cpu),
+        verifier_cpu_ms: last(runStats.verifier.cpu),
+
+        payload_present_bytes: payloadSize,
+        vc_size_bytes: last(runStats.vcBytes)
+      }
+    });
     res.json({verification});
+
+
+
   });
   wallet.listen(WALLET_PORT,BIND,()=>{
     console.log(`[wallet]  → bind http://${BIND}:${WALLET_PORT} (driver on http://${LOCAL}:${WALLET_PORT})`);
@@ -363,7 +405,22 @@ async function runBenchmark(){
       console.log(`\n======== Results for attrCount=${A}, reveal=${Math.round(R*100)}% ========\n`);
       console.table(table);
 
-      
+      writeRow({
+        type: "summary",
+        impl: IMPL_NAME,
+        attrCount: A,
+        revealRatio: R,
+        metrics: {
+          issuer_ms:            res["Issuer time (ms)"].mean,
+          wallet_ms:            res["Wallet time (ms)"].mean,
+          verifier_ms:          res["Verifier time (ms)"].mean,
+          issuer_cpu_ms:        res["Issuer CPU (ms)"].mean,
+          wallet_cpu_ms:        res["Wallet CPU (ms)"].mean,
+          verifier_cpu_ms:      res["Verifier CPU (ms)"].mean,
+          payload_present_bytes:res["Payload bytes"].mean,
+          vc_size_bytes:        res["VC bytes"].mean
+        }
+      });
       summary.push({
         attrCount: A,
         revealPct: Math.round(R*100),

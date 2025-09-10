@@ -8,10 +8,14 @@ services:
       ISSUER_PORT: 4000
       VERIFIER_PORT: 5000
       WALLET_PORT: 7000
+      IMPL_NAME: json-bbs-revised
+      RESULTS_DIR: /app/results
     ports:
       - "4000:4000"
       - "5000:5000"
       - "7000:7000"
+    volumes:
+      - ./results:/app/results
     profiles: ["revised"]
 
   json-bbs-plus:
@@ -23,10 +27,14 @@ services:
       ISSUER_PORT: 4100
       VERIFIER_PORT: 5100
       WALLET_PORT: 6100
+      IMPL_NAME: json-bbs-plus
+      RESULTS_DIR: /app/results
     ports:
       - "4100:4100"
       - "5100:5100"
       - "6100:6100"
+    volumes:
+      - ./results:/app/results
     profiles: ["plus"]
 
   jwt-legacy:
@@ -38,8 +46,12 @@ services:
       ISSUER_PORT: 4200
       VERIFIER_PORT: 5200
       WALLET_PORT: 6200
+      IMPL_NAME: jwt-legacy
+      RESULTS_DIR: /app/results
     ports:
       - "4200:4200"
       - "5200:5200"
       - "6200:6200"
+    volumes:
+      - ./results:/app/results
     profiles: ["legacy"]
