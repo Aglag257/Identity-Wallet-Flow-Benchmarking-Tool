@@ -55,3 +55,22 @@ services:
     volumes:
       - ./results:/app/results
     profiles: ["legacy"]
+
+  bbs-pairing-crypto:
+    build: .
+    image: wallet-bench:local
+    command: ["bbsRevisedRust.mjs"]
+    environment:
+      HOST: 0.0.0.0
+      ISSUER_PORT: 4300
+      VERIFIER_PORT: 5300
+      WALLET_PORT: 6300
+      IMPL_NAME: bbs-pairing-crypto
+      RESULTS_DIR: /results
+    ports:
+      - "4300:4300"
+      - "5300:5300"
+      - "6300:6300"
+    volumes:
+      - ./results_official:/results
+    profiles: ["pairing"]

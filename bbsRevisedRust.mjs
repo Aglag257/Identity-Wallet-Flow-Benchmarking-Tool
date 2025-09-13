@@ -3,7 +3,7 @@ import { v4 as uuid } from "uuid";
 import { performance } from "node:perf_hooks";
 import { SignJWT, jwtVerify, generateKeyPair as joseGenKP, exportJWK, importJWK } from "jose";
 import crypto from "node:crypto";
-import * as bbs from "@digitalbazaar/bbs-signatures";
+import { bbs } from "@mattrglobal/pairing-crypto";
 
 import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
@@ -23,7 +23,7 @@ const url = (port, path) => `http://${LOCAL}:${port}${path}`;
 const ATTR_COUNTS   = [5, 6, 7, 8, 9, 10];    
 const REVEAL_RATIOS = [0.20, 0.40, 0.60, 0.80, 1.00];
 
-const IMPL_NAME   = process.env.IMPL_NAME ?? "bbs-digitalbazaar";
+const IMPL_NAME   = process.env.IMPL_NAME ?? "bbs-pairing-crypto";
 const RESULTS_DIR = process.env.RESULTS_DIR ?? "./results";
 const RESULTS_FILE = `${RESULTS_DIR}/benchmarks.jsonl`;
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
@@ -70,7 +70,7 @@ const M = {
 };
 
 /*  Global issuer key (BBS 2023)  */
-const issuerBbs = await bbs.generateKeyPair({ ciphersuite: "BLS12-381-SHA-256" });
+const issuerBbs = await bbs.bls12381_sha256.generateKeyPair();
 
 /* 
  * 1) ISSUER — OID4VCI pre-authorized code + nonce + ldp_vc
@@ -154,7 +154,6 @@ async function startIssuer(port=ISSUER_PORT){
         }
       );
       if (protectedHeader.typ !== "openid4vci-proof+jwt") throw new Error("typ");
-      //if (payload.aud !== issuerIdentifier) throw new Error("aud");
       if (!nonces[payload.nonce]) throw new Error("nonce");
       delete nonces[payload.nonce];
 
@@ -185,12 +184,10 @@ async function startIssuer(port=ISSUER_PORT){
         ...attrs.map(([_, v]) => v)
       ].map(toBytes);
 
-      const signature = await bbs.sign({
+      const signature = await bbs.bls12381_sha256.sign({
         secretKey: issuerBbs.secretKey,
         publicKey: issuerBbs.publicKey,
-        header: new Uint8Array(),
-        messages,
-        ciphersuite: 'BLS12-381-SHA-256'
+        messages
       });
 
       const base = { signature: b64(signature), publicKey: b64(issuerBbs.publicKey), messages: messages.length };
@@ -241,13 +238,10 @@ async function startVerifier(port=VERIFIER_PORT){
       const msgs = revealed.map(r=>toBytes(r.val));
 
       const ok = await bbs.verifyProof({
-        publicKey: fromB64(vp_token.issuerPublicKey),
         proof: fromB64(vp_token.proof),
-        header: new Uint8Array(),
-        presentationHeader: fromB64url(vp_token.nonce),
-        disclosedMessages: msgs,
-        disclosedMessageIndexes: revealed.map(r=>r.idx),
-        ciphersuite: "BLS12-381-SHA-256"
+        publicKey: fromB64(vp_token.issuerPublicKey),
+        messages: msgs,
+        nonce: fromB64url(vp_token.nonce)
       });
 
       const { user, system } = process.cpuUsage(cpu0);
@@ -354,14 +348,17 @@ async function startWallet(port=WALLET_PORT){
     const reveal = Array.from({ length: k }, (_, j) => 2 + j);
 
     const { nonce } = await getJSON(url(VERIFIER_PORT, "/nonce"));
-    const proof = await bbs.deriveProof({
-      publicKey: issuerPublicKey,
-      signature,
-      header: new Uint8Array(),
-      messages: msgs,
-      presentationHeader: fromB64url(nonce),
-      disclosedMessageIndexes: reveal,
-      ciphersuite: "BLS12-381-SHA-256"
+
+    // Build boolean bitmap over ALL messages (issuer, seed, attrs…)
+    const revealedBitmap = Array(msgs.length).fill(false);
+    for (const idx of reveal) revealedBitmap[idx] = true;
+
+    const proof = await bbs.createProof({
+        publicKey: issuerPublicKey,
+        signature,
+        messages: msgs,
+        nonce: fromB64url(nonce),
+        revealed: revealedBitmap
     });
 
     const vp_token = {

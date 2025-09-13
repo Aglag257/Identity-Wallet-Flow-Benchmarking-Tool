@@ -22,6 +22,7 @@
   "dependencies": {
     "@digitalbazaar/bbs-signatures": "^3.0.0",
     "@mattrglobal/bbs-signatures": "^2.0.0",
+    "@mattrglobal/pairing-crypto": "^0.4.2",
     "express": "^5.1.0",
     "jose": "^6.1.0",
     "node-fetch": "^3.3.2",
