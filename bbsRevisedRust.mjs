@@ -3,7 +3,7 @@ import { v4 as uuid } from "uuid";
 import { performance } from "node:perf_hooks";
 import { SignJWT, jwtVerify, generateKeyPair as joseGenKP, exportJWK, importJWK } from "jose";
 import crypto from "node:crypto";
-import { bbs } from "@mattrglobal/pairing-crypto";
+import * as pairingCrypto from '@mattrglobal/pairing-crypto';
 
 import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
@@ -69,8 +69,8 @@ const M = {
   vcBytes: []
 };
 
-/*  Global issuer key (BBS 2023)  */
-const issuerBbs = await bbs.bls12381_sha256.generateKeyPair();
+/*  Global issuer key (Pairing Crypto)  */
+const issuerBbs = await pairingCrypto.bbs.bls12381_sha256.generateKeyPair({ ciphersuite: 'BLS12-381-SHA-256' });
 
 /* 
  * 1) ISSUER — OID4VCI pre-authorized code + nonce + ldp_vc
@@ -184,10 +184,12 @@ async function startIssuer(port=ISSUER_PORT){
         ...attrs.map(([_, v]) => v)
       ].map(toBytes);
 
-      const signature = await bbs.bls12381_sha256.sign({
+      const signature = await pairingCrypto.bbs.bls12381_sha256.sign({
         secretKey: issuerBbs.secretKey,
         publicKey: issuerBbs.publicKey,
-        messages
+        header: new Uint8Array(),
+        messages,
+        ciphersuite: "BLS12-381-SHA-256"
       });
 
       const base = { signature: b64(signature), publicKey: b64(issuerBbs.publicKey), messages: messages.length };
@@ -237,11 +239,14 @@ async function startVerifier(port=VERIFIER_PORT){
       const revealed = vp_token.revealed; // [{idx,val}]
       const msgs = revealed.map(r=>toBytes(r.val));
 
-      const ok = await bbs.verifyProof({
+      const ok = await pairingCrypto.bbs.bls12381_sha256.verifyProof({
         proof: fromB64(vp_token.proof),
         publicKey: fromB64(vp_token.issuerPublicKey),
-        messages: msgs,
-        nonce: fromB64url(vp_token.nonce)
+        header: new Uint8Array(),
+        presentationHeader: fromB64url(vp_token.nonce),
+        disclosedMessages: msgs,
+        disclosedMessageIndexes: revealed.map(r=>r.idx),
+        ciphersuite: "BLS12-381-SHA-256"
       });
 
       const { user, system } = process.cpuUsage(cpu0);
@@ -264,140 +269,140 @@ async function startVerifier(port=VERIFIER_PORT){
 
 /* 
  * 3) WALLET — pre-authorized issuance + unlinkable presentation
- *  */
+ */
 async function startWallet(port=WALLET_PORT){
   const app = express().use(express.json());
 
   app.post("/run", async (_q,res)=>{
     const t0 = performance.now(), cpu0 = process.cpuUsage();
-    // parameters for this run (injected by runBenchmark)
-    const attrCount   = Math.max(4, Number(_q.body?.attrCount ?? 5));     // min 4 to keep canonical
-    const revealRatio = Math.min(1, Math.max(0, Number(_q.body?.revealRatio ?? 0.2)));
+    try {
+      // parameters for this run (injected by runBenchmark)
+      const attrCount   = Math.max(4, Number(_q.body?.attrCount ?? 5));     // min 4 to keep canonical
+      const revealRatio = Math.min(1, Math.max(0, Number(_q.body?.revealRatio ?? 0.2)));
 
+      // 1) Offer
+      const offer = await getJSON(url(ISSUER_PORT, "/credential-offer"));
+      const code = offer.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"]["pre-authorized_code"];
 
-    // 1) Offer
-    const offer = await getJSON(url(ISSUER_PORT, "/credential-offer"));
-    const code = offer.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"]["pre-authorized_code"];
+      // 2) Token
+      const { access_token } = await getJSON(url(ISSUER_PORT, "/token"),{
+        method:"POST", headers:{ "content-type":"application/json" },
+        body:JSON.stringify({ grant_type:"urn:ietf:params:oauth:grant-type:pre-authorized_code", "pre-authorized_code":code })
+      });
 
-    // 2) Token
-    const { access_token } = await getJSON(url(ISSUER_PORT, "/token"),{
-      method:"POST", headers:{ "content-type":"application/json" },
-      body:JSON.stringify({ grant_type:"urn:ietf:params:oauth:grant-type:pre-authorized_code", "pre-authorized_code":code })
-    });
+      // 3) Issuer Nonce (c_nonce)
+      const { c_nonce } = await getJSON(url(ISSUER_PORT, "/nonce"),{method:"POST"});
 
-    // 3) Issuer Nonce (c_nonce)
-    const { c_nonce } = await getJSON(url(ISSUER_PORT, "/nonce"),{method:"POST"});
+      // 4) Minimal attestation proof (JWT) — includes c_nonce
+      const { publicKey: holderPub, privateKey: holderPriv } = await joseGenKP("ES256");
+      const holderPubJwk = await exportJWK(holderPub);
+      const attJws = await new SignJWT({
+        aud: offer.credential_issuer,
+        nonce: c_nonce
+      }).setProtectedHeader({
+        alg: "ES256",
+        typ: "openid4vci-proof+jwt",
+        jwk: holderPubJwk
+      }).sign(holderPriv);
 
+      // 5) Credential request
+      const credRes = await getJSON(url(ISSUER_PORT, "/credential"),{
+        method:"POST",
+        headers:{ "content-type":"application/json", Authorization:`Bearer ${access_token}` },
+        body:JSON.stringify({
+          format:"ldp_vc",
+          proofs:{ jwt: [attJws]  },
+          c_nonce,
+          attr_count: attrCount     
+        })
+      });
 
-    // 4) Minimal attestation proof (JWT) — includes c_nonce
-    const { publicKey: holderPub, privateKey: holderPriv } = await joseGenKP("ES256");
-    const holderPubJwk = await exportJWK(holderPub);
-    const attJws = await new SignJWT({
-      aud: offer.credential_issuer,
-      nonce: c_nonce
-    }).setProtectedHeader({
-      alg: "ES256",
-      typ: "openid4vci-proof+jwt",
-      jwk: holderPubJwk
-    }).sign(holderPriv);
+      // 6) Build unlinkable VP with BBS derived proof (dynamic attrs + reveal %)
+      const vc = credRes.credential;
+      const base = credRes.base_proof;
+      const issuerPublicKey = fromB64(base.publicKey);
+      const signature = fromB64(base.signature);
 
+      const orderedPairs = [];
+      const cs = vc.credentialSubject;
+      const canonical = ["givenName","familyName","degree","gpa"];
+      for (const k of canonical) if (k in cs) orderedPairs.push([k, cs[k]]);
+      let i = 5;
+      while (true) {
+        const k = `attr_${i}`;
+        if (!(k in cs)) break;
+        orderedPairs.push([k, cs[k]]);
+        i++;
+      }
 
-    // 5) Credential request
-    const credRes = await getJSON(url(ISSUER_PORT, "/credential"),{
-      method:"POST",
-      headers:{ "content-type":"application/json", Authorization:`Bearer ${access_token}` },
-      body:JSON.stringify({
-        format:"ldp_vc",
-        proofs:{ jwt: [attJws]  },
-        c_nonce,
-        attr_count: attrCount     
-      })
-    });
+      const msgs = [
+        vc.issuer,
+        cs.seed,
+        ...orderedPairs.map(([_, v]) => v)
+      ].map(toBytes);
 
-    // 6) Build unlinkable VP with BBS derived proof (dynamic attrs + reveal %)
-    const vc = credRes.credential;
-    const base = credRes.base_proof;
-    const issuerPublicKey = fromB64(base.publicKey);
-    const signature = fromB64(base.signature);
+      if ((base?.messages | 0) !== msgs.length) {
+        throw new Error(`message count mismatch: signed ${base?.messages}, have ${msgs.length}`);
+      }
 
-    const orderedPairs = [];
-    const cs = vc.credentialSubject;
-    const canonical = ["givenName","familyName","degree","gpa"];
-    for (const k of canonical) if (k in cs) orderedPairs.push([k, cs[k]]);
-    let i = 5;
-    while (true) {
-      const k = `attr_${i}`;
-      if (!(k in cs)) break;
-      orderedPairs.push([k, cs[k]]);
-      i++;
-    }
+      const totalAttrs = orderedPairs.length;
+      const k = Math.max(0, Math.min(totalAttrs, Math.floor(revealRatio * totalAttrs)));
 
-    const msgs = [
-      vc.issuer,
-      cs.seed,
-      ...orderedPairs.map(([_, v]) => v)
-    ].map(toBytes);
+      const reveal = Array.from({ length: k }, (_, j) => 2 + j);
 
-    if ((base?.messages | 0) !== msgs.length) {
-      throw new Error(`message count mismatch: signed ${base?.messages}, have ${msgs.length}`);
-    }
+      const { nonce } = await getJSON(url(VERIFIER_PORT, "/nonce"));
 
-    const totalAttrs = orderedPairs.length;
-    const k = Math.max(0, Math.min(totalAttrs, Math.floor(revealRatio * totalAttrs)));
-
-    const reveal = Array.from({ length: k }, (_, j) => 2 + j);
-
-    const { nonce } = await getJSON(url(VERIFIER_PORT, "/nonce"));
-
-    // Build boolean bitmap over ALL messages (issuer, seed, attrs…)
-    const revealedBitmap = Array(msgs.length).fill(false);
-    for (const idx of reveal) revealedBitmap[idx] = true;
-
-    const proof = await bbs.createProof({
+      const revealMsgArray = pairingCrypto.utilities.convertToRevealMessageArray(msgs, reveal);
+      const proof = await pairingCrypto.bbs.bls12381_sha256.deriveProof({
         publicKey: issuerPublicKey,
         signature,
-        messages: msgs,
-        nonce: fromB64url(nonce),
-        revealed: revealedBitmap
-    });
+        header: new Uint8Array(),
+        messages: revealMsgArray,
+        presentationHeader: fromB64url(nonce),
+        disclosedMessageIndexes: reveal,
+        ciphersuite: "BLS12-381-SHA-256"
+      });
 
-    const vp_token = {
-      nonce,
-      issuerPublicKey: base.publicKey,
-      revealed: reveal.map(i=>({ idx:i, val: Buffer.from(msgs[i]).toString() })),
-      proof: b64(proof)
-    };
+      const vp_token = {
+        nonce,
+        issuerPublicKey: base.publicKey,
+        revealed: reveal.map(i=>({ idx:i, val: Buffer.from(msgs[i]).toString() })),
+        proof: b64(proof)
+      };
 
-    const body = JSON.stringify({ vp_token });
-    M.payload.push(Buffer.byteLength(body));
+      const body = JSON.stringify({ vp_token });
+      M.payload.push(Buffer.byteLength(body));
 
-    const ok = await getJSON(url(VERIFIER_PORT, "/verify"),{
-      method:"POST", headers:{ "content-type":"application/json" }, body
-    });
+      const ok = await getJSON(url(VERIFIER_PORT, "/verify"),{
+        method:"POST", headers:{ "content-type":"application/json" }, body
+      });
 
-    const { user, system } = process.cpuUsage(cpu0);
-    M.wallet.t.push(performance.now()-t0);
-    M.wallet.cpu.push((user+system) / 1000);
+      const { user, system } = process.cpuUsage(cpu0);
+      M.wallet.t.push(performance.now()-t0);
+      M.wallet.cpu.push((user+system) / 1000);
 
-    writeRow({
-      type: "run",
-      impl: IMPL_NAME,
-      attrCount,
-      revealRatio,
-      metrics: {
-        issuer_ms:   last(M.issuer.t),
-        wallet_ms:   last(M.wallet.t),
-        verifier_ms: last(M.verifier.t),
+      writeRow({
+        type: "run",
+        impl: IMPL_NAME,
+        attrCount,
+        revealRatio,
+        metrics: {
+          issuer_ms:   last(M.issuer.t),
+          wallet_ms:   last(M.wallet.t),
+          verifier_ms: last(M.verifier.t),
 
-        issuer_cpu_ms:   last(M.issuer.cpu),
-        wallet_cpu_ms:   last(M.wallet.cpu),
-        verifier_cpu_ms: last(M.verifier.cpu),
+          issuer_cpu_ms:   last(M.issuer.cpu),
+          wallet_cpu_ms:   last(M.wallet.cpu),
+          verifier_cpu_ms: last(M.verifier.cpu),
 
-        payload_present_bytes: last(M.payload),
-        vc_size_bytes:         last(M.vcBytes)
-      }
-    });
-    res.json({ verified: ok.verified, vcBytes: JSON.stringify(credRes).length });
+          vc_size_bytes:         last(M.vcBytes)
+        }
+      });
+      res.json({ verified: ok.verified, vcBytes: JSON.stringify(credRes).length });
+    } catch (e) {
+      console.error("[wallet:/run]", e?.stack || e);
+      res.status(500).json({ verified:false, error:String(e?.message||e) });
+    }
   });
 
   // JSON 404 LAST
