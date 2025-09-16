@@ -8,7 +8,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.figure import Figure
 
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['ps.fonttype'] = 42
 
 
 def find_inputs(args) -> List[Path]:
@@ -176,25 +179,8 @@ def aggregate(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         sys.exit(1)
 
     for m in metrics_present:
-        if f"{m}_mean" not in df_merged.columns and f"{m}_mean" in df_summary.columns:
-            pass
         if f"{m}_mean" not in df_merged.columns and f"{m}_mean" in df_from_runs.columns:
-            pass
-        if f"{m}_mean" not in df_merged.columns:
-            if f"{m}_mean" in df_summary.columns:
-                continue
-            if f"{m}_mean" not in df_merged.columns and f"{m}_mean" not in df_summary.columns:
-                if f"{m}_mean" in df_from_runs.columns:
-                    continue
-                if f"{m}_mean" not in df_merged.columns and f"{m}_mean" not in df_from_runs.columns:
-                    run_col = f"{m}_mean"
-                    if run_col not in df_merged.columns and f"{m}_mean" not in df_merged.columns:
-                        if f"{m}_mean" not in df_merged.columns and f"{m}_mean" not in df_merged.columns:
-                            pass
-    for m in metrics_present:
-        run_mean_col = f"{m}_mean"
-        if run_mean_col not in df_merged.columns and f"{m}_mean" in df_from_runs.columns:
-            df_merged[run_mean_col] = df_from_runs[f"{m}_mean"]
+            df_merged[f"{m}_mean"] = df_from_runs[f"{m}_mean"]
     if have_run:
         for m in metrics_present:
             if f"{m}_mean" not in df_merged.columns and f"{m}_mean" in df_from_runs.columns:
@@ -230,46 +216,55 @@ def title_metric_name(m: str) -> str:
         "proof_size_bytes": "Proof size (bytes)",
     }.get(m, m)
 
-def plot_line_with_err(df_sum: pd.DataFrame, metric: str, outdir: Path, facet_by: str, const_value, x: str, group: str = "impl"):
+def plot_line_with_err(
+    df_sum: pd.DataFrame,
+    metric: str,
+    facet_by: str,
+    const_value,
+    x: str,
+    group: str = "impl",
+) -> Tuple[Figure, str] | None:
     m_mean = f"{metric}_mean"
     m_std  = f"{metric}_std"
     if facet_by not in df_sum.columns:
-        return
+        return None
+
     sub = df_sum[df_sum[facet_by].eq(const_value)].dropna(subset=[m_mean])
     if sub.empty:
-        return
+        return None
 
     sub = sub.sort_values(by=[x, group])
 
-    # Build plot
-    plt.figure(figsize=(6.0, 4.0), dpi=150)
+    fig, ax = plt.subplots(figsize=(6.0, 4.0), dpi=150)
+
     for impl, part in sub.groupby(group):
         X = part[x].to_numpy(dtype=float)
         Y = part[m_mean].to_numpy(dtype=float)
+
         Yerr = None
         if m_std in part.columns and part.get(f"{metric}_count", pd.Series([0]*len(part))).fillna(0).astype(int).min() >= 2:
             Yerr = part[m_std].to_numpy(dtype=float)
+
         if Yerr is not None and np.isfinite(Yerr).any():
-            plt.errorbar(X, Y, yerr=Yerr, marker='o', capsize=3, label=str(impl))
+            ax.errorbar(X, Y, yerr=Yerr, marker='o', capsize=3, label=str(impl))
         else:
-            plt.plot(X, Y, marker='o', label=str(impl))
+            ax.plot(X, Y, marker='o', label=str(impl))
 
-    plt.xlabel(x if x != "revealRatio" else "Reveal ratio")
-    plt.ylabel(title_metric_name(metric))
+    ax.set_xlabel(x if x != "revealRatio" else "Reveal ratio")
+    ax.set_ylabel(title_metric_name(metric))
     if facet_by == "attrCount":
-        plt.title(f"{title_metric_name(metric)} vs Reveal — attrCount={const_value}")
+        ax.set_title(f"{title_metric_name(metric)} vs Reveal — attrCount={const_value}")
     else:
-        plt.title(f"{title_metric_name(metric)} vs AttrCount — reveal={const_value:.2f}")
-    plt.legend()
-    fname = f"{metric}_vs_{'reveal' if x=='revealRatio' else 'attrCount'}_{facet_by}{const_value}.png"
-    plt.tight_layout()
-    plt.savefig(outdir / fname)
-    plt.close()
-    return outdir / fname
+        ax.set_title(f"{title_metric_name(metric)} vs AttrCount — reveal={const_value:.2f}")
+    ax.legend()
+    fig.tight_layout()
+
+    name = f"{metric}_vs_{'reveal' if x=='revealRatio' else 'attrCount'}_{facet_by}{const_value}"
+    return fig, name
 
 
-def plot_all(df_sum: pd.DataFrame, outdir: Path) -> List[Path]:
-    figs: List[Path] = []
+def plot_all(df_sum: pd.DataFrame) -> List[Tuple[Figure, str]]:
+    figs: List[Tuple[Figure, str]] = []
     metrics_present = sorted(set(k.split("_mean")[0] for k in df_sum.columns if k.endswith("_mean")))
     have_iwv = all(f"{m}_mean" in df_sum.columns for m in ("issuer_ms","wallet_ms","verifier_ms"))
     if have_iwv and "e2e_ms_mean" not in df_sum.columns:
@@ -281,16 +276,18 @@ def plot_all(df_sum: pd.DataFrame, outdir: Path) -> List[Path]:
         if "revealRatio" not in df_sum.columns: 
             continue
         for ac in sorted(df_sum["attrCount"].dropna().unique().astype(int)):
-            p = plot_line_with_err(df_sum, m, outdir, facet_by="attrCount", const_value=ac, x="revealRatio")
-            if p: figs.append(p)
+            res = plot_line_with_err(df_sum, m, facet_by="attrCount", const_value=ac, x="revealRatio")
+            if res:
+                figs.append(res)
 
     # 2) AttrCount runs for each revealRatio
     if "revealRatio" in df_sum.columns:
         reveals = sorted(df_sum["revealRatio"].dropna().unique())
         for m in metrics_present:
             for rv in reveals:
-                p = plot_line_with_err(df_sum, m, outdir, facet_by="revealRatio", const_value=rv, x="attrCount")
-                if p: figs.append(p)
+                res = plot_line_with_err(df_sum, m, facet_by="revealRatio", const_value=rv, x="attrCount")
+                if res:
+                    figs.append(res)
 
     return figs
 
@@ -317,6 +314,8 @@ def main():
     ap.add_argument("--dir", help="Directory with *.jsonl files")
     ap.add_argument("--inputs", nargs="*", help="Explicit list of JSONL files")
     ap.add_argument("--out", default="paper_plots", help="Output directory for plots & tables")
+    ap.add_argument("--save-individual-pdfs", action="store_true",
+                    help="Also save each plot as its own vector PDF file")
     args = ap.parse_args()
 
     inputs = find_inputs(args)
@@ -335,21 +334,21 @@ def main():
     if not df_runs.empty:
         df_runs.to_csv(outdir / "runs_only.csv", index=False)
 
-    figs = plot_all(df_sum, outdir)
-    print(f"[i] Wrote {len(figs)} plot images → {outdir}")
+    figs = plot_all(df_sum)
+    print(f"[i] Prepared {len(figs)} plots (vector)")
 
-    # bundle PDF
+    # bundle multi-page PDF directly from figures (vector)
     if figs:
         pdf_path = outdir / "all_plots.pdf"
         with PdfPages(pdf_path) as pdf:
-            for img in figs:
-                fig = plt.figure()
-                img_arr = plt.imread(str(img))
-                plt.imshow(img_arr)
-                plt.axis("off")
+            for fig, name in figs:
                 pdf.savefig(fig, bbox_inches="tight")
+                if args.save_individual_pdfs:
+                    fig.savefig(outdir / f"{name}.pdf", bbox_inches="tight")
                 plt.close(fig)
         print(f"[i] Wrote combined PDF → {pdf_path}")
+    else:
+        print("[i] No plots to write.")
 
     write_csv_tables(df_sum, outdir)
     print(f"[i] Tables saved in {outdir}")

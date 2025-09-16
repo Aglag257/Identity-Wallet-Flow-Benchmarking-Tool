@@ -100,3 +100,7 @@ These choices keep the comparison focused on:
 * The **selective disclosure** mechanics (disclosure lists vs BBS derived proofs),
 * Holder binding (e.g., **KB-JWT** PoP for SD-JWT VC).
 
+for plots 
+
+pip install pandas numpy matplotlib
+python3 plot.py --dir ./results_official --out paper_plots2
