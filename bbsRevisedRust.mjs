@@ -23,7 +23,7 @@ const url = (port, path) => `http://${LOCAL}:${port}${path}`;
 const ATTR_COUNTS   = [5, 6, 7, 8, 9, 10];    
 const REVEAL_RATIOS = [0.20, 0.40, 0.60, 0.80, 1.00];
 
-const IMPL_NAME   = process.env.IMPL_NAME ?? "bbs-pairing-crypto";
+const IMPL_NAME   = process.env.IMPL_NAME ?? "bbs2023-pairing-crypto";
 const RESULTS_DIR  = process.env.RESULTS_DIR ?? "./results";
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
 

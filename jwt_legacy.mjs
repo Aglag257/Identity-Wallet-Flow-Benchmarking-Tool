@@ -25,7 +25,7 @@ const VERIFIER_BASE = process.env.VERIFIER_BASE_URL ?? `http://${LOCAL}:${VERIFI
 const CREDENTIAL_TYPE = "UniversityDegreeCredential";
 
 //  Results logging config
-const IMPL_NAME   = process.env.IMPL_NAME ?? "json-bbs-revised";
+const IMPL_NAME   = process.env.IMPL_NAME ?? "jwt legacy";
 const RESULTS_DIR  = process.env.RESULTS_DIR ?? "./results";
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
 
