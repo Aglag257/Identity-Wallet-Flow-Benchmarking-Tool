@@ -26,9 +26,11 @@ const CREDENTIAL_TYPE = "UniversityDegreeCredential";
 
 //  Results logging config
 const IMPL_NAME   = process.env.IMPL_NAME ?? "json-bbs-revised";
-const RESULTS_DIR = process.env.RESULTS_DIR ?? "./results";
-const RESULTS_FILE = `${RESULTS_DIR}/benchmarks.jsonl`;
+const RESULTS_DIR  = process.env.RESULTS_DIR ?? "./results";
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
+
+const RUN_ID       = new Date().toISOString().replace(/[:.]/g, "-");
+const RESULTS_FILE = `${RESULTS_DIR}/benchmarks_${IMPL_NAME}_${RUN_ID}.jsonl`;
 
 function writeRow(row) {
   fs.appendFileSync(RESULTS_FILE, JSON.stringify(row) + "\n", "utf8");

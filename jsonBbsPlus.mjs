@@ -30,9 +30,11 @@ const ATTR_COUNTS   = [5, 6, 7, 8, 9, 10];
 const REVEAL_RATIOS = [0.20, 0.40, 0.60, 0.80, 1.00];
 
 const IMPL_NAME   = process.env.IMPL_NAME ?? "json-bbs-plus";  
-const RESULTS_DIR = process.env.RESULTS_DIR ?? "./results";
-const RESULTS_FILE = `${RESULTS_DIR}/benchmarks.jsonl`;
+const RESULTS_DIR  = process.env.RESULTS_DIR ?? "./results";
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
+
+const RUN_ID       = new Date().toISOString().replace(/[:.]/g, "-");
+const RESULTS_FILE = `${RESULTS_DIR}/benchmarks_${IMPL_NAME}_${RUN_ID}.jsonl`;
 
 function writeRow(row) {
   fs.appendFileSync(RESULTS_FILE, JSON.stringify(row) + "\n", "utf8");

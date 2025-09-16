@@ -26,6 +26,9 @@ docker compose --profile plus up --build
 
 # SD-JWT VC + KB-JWT
 docker compose --profile legacy up --build
+
+docker compose --profile pairing up --build
+
 ```
 
 ## Quick start (Linux, no Docker)

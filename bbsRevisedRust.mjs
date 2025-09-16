@@ -24,9 +24,11 @@ const ATTR_COUNTS   = [5, 6, 7, 8, 9, 10];
 const REVEAL_RATIOS = [0.20, 0.40, 0.60, 0.80, 1.00];
 
 const IMPL_NAME   = process.env.IMPL_NAME ?? "bbs-pairing-crypto";
-const RESULTS_DIR = process.env.RESULTS_DIR ?? "./results";
-const RESULTS_FILE = `${RESULTS_DIR}/benchmarks.jsonl`;
+const RESULTS_DIR  = process.env.RESULTS_DIR ?? "./results";
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
+
+const RUN_ID       = new Date().toISOString().replace(/[:.]/g, "-");
+const RESULTS_FILE = `${RESULTS_DIR}/benchmarks_${IMPL_NAME}_${RUN_ID}.jsonl`;
 
 function writeRow(row) {
   fs.appendFileSync(RESULTS_FILE, JSON.stringify(row) + "\n", "utf8");
@@ -69,7 +71,7 @@ const M = {
   vcBytes: []
 };
 
-/*  Global issuer key (Pairing Crypto)  */
+/*  Global issuer key  */
 const issuerBbs = await pairingCrypto.bbs.bls12381_sha256.generateKeyPair({ ciphersuite: 'BLS12-381-SHA-256' });
 
 /* 
@@ -394,7 +396,7 @@ async function startWallet(port=WALLET_PORT){
           issuer_cpu_ms:   last(M.issuer.cpu),
           wallet_cpu_ms:   last(M.wallet.cpu),
           verifier_cpu_ms: last(M.verifier.cpu),
-
+          payload_present_bytes: last(M.payload),
           vc_size_bytes:         last(M.vcBytes)
         }
       });
