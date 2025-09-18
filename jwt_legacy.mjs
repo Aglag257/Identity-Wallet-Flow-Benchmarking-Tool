@@ -44,6 +44,9 @@ function last(a) {
 const ATTR_COUNTS   = [5, 6, 7, 8, 9, 10];
 const REVEAL_RATIOS = [0.20, 0.40, 0.60, 0.80, 1.00];
 
+const ATTR_COUNTS_EXTRA = [20, 40, 60, 80, 100];
+const FIXED_REVEAL = 0.50;
+
 function resetStats() {
   runStats.issuer.t.length = 0;   runStats.issuer.cpu.length = 0;
   runStats.wallet.t.length = 0;   runStats.wallet.cpu.length = 0;
@@ -432,6 +435,78 @@ async function runBenchmark(){
       });
     }
   }
+  for (const A of ATTR_COUNTS_EXTRA) {
+    const R = FIXED_REVEAL;
+
+    resetStats();
+    console.log(`\n--- Running ${ITERATIONS} runs for attrCount=${A}, reveal=${Math.round(R*100)}% (EXTRA) ---`);
+
+    for (let i = 0; i < ITERATIONS; i++) {
+      const r = await fetch(`http://127.0.0.1:${WALLET_PORT}/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ attrCount: A, revealRatio: R })
+      }).then(r => r.json());
+
+      if (!r.verification?.verified) {
+        throw new Error(`Run #${i+1} failed verification (A=${A}, R=${R})`);
+      }
+      if ((i+1) % 10 === 0) {
+        console.log(`✓ completed ${i+1}/${ITERATIONS}`);
+      }
+    }
+
+    const res = {
+      "Issuer time (ms)"  : stats(runStats.issuer.t),
+      "Wallet time (ms)"  : stats(runStats.wallet.t),
+      "Verifier time (ms)": stats(runStats.verifier.t),
+      "Issuer CPU (ms)"   : stats(runStats.issuer.cpu),
+      "Wallet CPU (ms)"   : stats(runStats.wallet.cpu),
+      "Verifier CPU (ms)" : stats(runStats.verifier.cpu),
+      "Payload bytes"     : stats(runStats.payload),
+      "VC bytes"          : stats(runStats.vcBytes)
+    };
+
+    const table = {};
+    for (const [k, v] of Object.entries(res)) {
+      table[k] = {
+        mean:   v.mean.toFixed(2),
+        std:    v.std.toFixed(2),
+        median: v.median.toFixed(2),
+        min:    v.min.toFixed(2),
+        max:    v.max.toFixed(2)
+      };
+    }
+
+    console.log(`\n======== Results for attrCount=${A}, reveal=${Math.round(R*100)}% (EXTRA) ========\n`);
+    console.table(table);
+
+    writeRow({
+      type: "summary",
+      impl: IMPL_NAME,
+      attrCount: A,
+      revealRatio: R,
+      metrics: {
+        issuer_ms:             res["Issuer time (ms)"].mean,
+        wallet_ms:             res["Wallet time (ms)"].mean,
+        verifier_ms:           res["Verifier time (ms)"].mean,
+        issuer_cpu_ms:         res["Issuer CPU (ms)"].mean,
+        wallet_cpu_ms:         res["Wallet CPU (ms)"].mean,
+        verifier_cpu_ms:       res["Verifier CPU (ms)"].mean,
+        payload_present_bytes: res["Payload bytes"].mean,
+        vc_size_bytes:         res["VC bytes"].mean
+      }
+    });
+
+    summary.push({
+      attrCount: A,
+      revealPct: Math.round(R*100),
+      wallet_ms_mean: table["Wallet time (ms)"].mean,
+      payload_bytes_mean: table["Payload bytes"].mean,
+      vc_bytes_mean: table["VC bytes"].mean
+    });
+  }
+
 
   if (summary.length) {
     console.log("\n=========== Compact summary (means only) ===========");
