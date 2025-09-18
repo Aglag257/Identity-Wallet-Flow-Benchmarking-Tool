@@ -49,7 +49,6 @@ npm ci
 
 # 4) Run any flow (examples)
   node jwt_legacy.mjs
-  node jsonBbsRevised.mjs
 ```
 
 ## Quick start (Android / Termux)
@@ -60,13 +59,17 @@ npm ci
 
 ```bash
 pkg update -y && pkg upgrade -y
-pkg install -y nodejs-lts git jq
-node -v   # should be ≥ 18
-mkdir -p ~/conf-metrics && cd ~/conf-metrics
-git clone <this-repo-url> .
-jq '.type="module"' package.json > package.tmp && mv package.tmp package.json
-npm ci
-# Choose and run one script:
+pkg install -y git nodejs-lts openssl-tool
+pkg install -y clang make python pkg-config
+git clone <repo url>
+cd Identity-Wallet-Flow-Benchmarking-Tool
+npm install
+export RESULTS_DIR=./results
+export IMPL_NAME="bbs2023-pairing-crypto"
+node bbsRevisedRust.mjs
+export IMPL_NAME="json-bbs-plus"
+node jsonBbsPlus.mjs
+export IMPL_NAME="jwt-legacy"
 node jwt_legacy.mjs
 ```
 
