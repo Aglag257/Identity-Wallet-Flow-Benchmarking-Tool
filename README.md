@@ -27,6 +27,7 @@ docker compose --profile plus up --build
 # SD-JWT VC + KB-JWT
 docker compose --profile legacy up --build
 
+# BBS 2023 + unlinkable VP (mattr pairing cryto library)
 docker compose --profile pairing up --build
 
 ```
@@ -49,6 +50,17 @@ npm ci
 
 # 4) Run any flow (examples)
   node jwt_legacy.mjs
+
+# P.S. If you want comparable results between bbs+ and 2023 bbs revisioned you should run the bbs+ flow like this so it doesnt use the native libraries (that dont exist in the bbs2023 implementation) making it more efficient
+node --experimental-permission --allow-fs-read=* --allow-fs-write=* --allow-worker --allow-wasi jsonBbsPlus.mjs
+
+```
+
+## For plots 
+```bash
+
+pip install pandas numpy matplotlib
+python3 plot.py --dir ./<results folder> --out <plots folder>
 ```
 
 ## Quick start (Android / Termux)
@@ -103,7 +115,3 @@ These choices keep the comparison focused on:
 * The **selective disclosure** mechanics (disclosure lists vs BBS derived proofs),
 * Holder binding (e.g., **KB-JWT** PoP for SD-JWT VC).
 
-for plots 
-
-pip install pandas numpy matplotlib
-python3 plot.py --dir ./results_official --out paper_plots2

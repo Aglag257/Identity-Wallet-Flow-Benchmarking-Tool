@@ -21,7 +21,13 @@ services:
   json-bbs-plus:
     build: .
     image: wallet-bench:local
-    command: ["jsonBbsPlus.mjs"]
+    command:
+      - --experimental-permission
+      - --allow-fs-read=*
+      - --allow-fs-write=*
+      - --allow-worker
+      - --allow-wasi
+      - jsonBbsPlus.mjs
     environment:
       HOST: 0.0.0.0
       ISSUER_PORT: 4100

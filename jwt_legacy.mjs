@@ -171,7 +171,6 @@ async function main(){
       iat:Math.floor(Date.now()/1000),
       exp:Math.floor(Date.now()/1000+3600),
       vct:`urn:example:${CREDENTIAL_TYPE}`,  
-      cnf:{ jwk: holderJwk },
       _sd
     }).setProtectedHeader({alg:"ES256",typ:"dc+sd-jwt"}) 
       .sign(signingKey.privateKey);
@@ -193,7 +192,7 @@ async function main(){
     const t0=performance.now(), cpu0=process.cpuUsage();
     try{
 
-      const { credential, disclosures, kb_jwt } = req.body;
+      const { credential, disclosures } = req.body;
       // 1) Verify Issuer-signed SD-JWT
       const { payload: vc, protectedHeader } =
         await jwtVerify(credential, signingKey.publicKey);
@@ -213,21 +212,6 @@ async function main(){
         sdSet.delete(h);
       }
 
-      // 3) Verify KB-JWT (holder binding)
-      const kbHdr = decodeProtectedHeader(kb_jwt);
-      if(kbHdr?.typ !== "kb+jwt") throw new Error("kb_typ");
-      if(!vc?.cnf?.jwk) throw new Error("missing_cnf");
-      const holderPub = await importJWK(vc.cnf.jwk, "ES256");
-      const { payload: kb } = await jwtVerify(kb_jwt, holderPub);
-
-      // 4) Validate audience, nonce, and sd_hash
-      if(kb.aud !== VERIFIER_BASE) throw new Error("kb_aud");
-      if(!verifierNonces[kb.nonce]) throw new Error("kb_nonce");
-      delete verifierNonces[kb.nonce];
-
-      const sdForHash = credential + "~" + disclosures.join("~") + "~";
-      const expected = createHash("sha256").update(sdForHash).digest("base64url");
-      if(kb.sd_hash !== expected) throw new Error("kb_sd_hash");
 
       runStats.verifier.t.push(performance.now()-t0);
 
@@ -238,12 +222,6 @@ async function main(){
     }catch(e){ res.status(400).json({verified:false,error:e.message}); }
   });
 
-  const verifierNonces = Object.create(null);
-  verifier.get("/nonce", (_req,res)=>{
-    const n = crypto.randomUUID().replace(/-/g,"");
-    verifierNonces[n] = true;
-    res.json({nonce:n});
-  });
 
   verifier.listen(VERIFIER_PORT,BIND,()=>console.log(`[verifier] → bind http://${BIND}:${VERIFIER_PORT} (internal ${VERIFIER_BASE})`));
 
@@ -299,27 +277,16 @@ async function main(){
 
     runStats.vcBytes.push(Buffer.byteLength(JSON.stringify(vc)));
 
-    const { nonce } = await fetch(`${VERIFIER_BASE}/nonce`).then(r=>r.json());;
+    const payloadSize = Buffer.byteLength(vc.credential) + Buffer.byteLength(selectedDisclosures.join(""));
 
-    // Build SD-JWT+KB
-    const sdForHash = vc.credential + "~" + selectedDisclosures.join("~") + "~";
-    const sd_hash = createHash("sha256").update(sdForHash).digest("base64url");
-
-    const kbJwt = await new SignJWT({
-      nonce,
-      aud: VERIFIER_BASE,
-      iat: Math.floor(Date.now()/1000),
-      sd_hash
-    }).setProtectedHeader({ alg:"ES256", typ:"kb+jwt" })
-      .sign(holderKey.privateKey);
-
-    const payloadSize = Buffer.byteLength(kbJwt) +
-      Buffer.byteLength(vc.credential) + Buffer.byteLength(selectedDisclosures.join(""));
     runStats.payload.push(payloadSize);
-    const verification = await fetch(`${VERIFIER_BASE}/verify`,{
-      method:"POST",headers:{ "content-type":"application/json" },
-      body:JSON.stringify({ credential: vc.credential, disclosures: selectedDisclosures, kb_jwt: kbJwt })
-    }).then(r=>r.json());
+
+
+    const verification = await fetch(`${VERIFIER_BASE}/verify`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ credential: vc.credential, disclosures: selectedDisclosures })
+    }).then(r => r.json());
 
     runStats.wallet.t.push(performance.now()-t0);
     const cpu = process.cpuUsage(cpu0);
