@@ -82,14 +82,11 @@ function digestDisclosure(disclosure){
 async function main(){
   /* key for ES256 */
   // Holder (wallet) key for ES256
-  const holderKey = await crypto.subtle.generateKey(
-    { name:"ECDSA", namedCurve:"P-256" }, true, ["sign","verify"]
-  );
-  const holderPubJwk = await crypto.subtle.exportKey("jwk", holderKey.publicKey);
 
-  const signingKey = await crypto.subtle.generateKey(
-    { name:"ECDSA", namedCurve:"P-256" }, true, ["sign","verify"]
-  );
+  const { generateKeyPair: joseGenKP, exportJWK: joseExportJWK } = await import("jose");
+  const { publicKey: holderPubKey, privateKey: holderPrivKey } = await joseGenKP("ES256");
+  const holderPubJwk = await joseExportJWK(holderPubKey);
+  const { publicKey: issuerPubKey, privateKey: issuerPrivKey } = await joseGenKP("ES256");
 
   /* ── ISSUER ─────────────────────────────────────────────── */
   const issuer = express()
@@ -173,7 +170,7 @@ async function main(){
       vct:`urn:example:${CREDENTIAL_TYPE}`,  
       _sd
     }).setProtectedHeader({alg:"ES256",typ:"dc+sd-jwt"}) 
-      .sign(signingKey.privateKey);
+      .sign(issuerPrivKey);
 
     runStats.issuer.t.push(performance.now()-t0);
     const cpu = process.cpuUsage(cpu0);
@@ -195,7 +192,7 @@ async function main(){
       const { credential, disclosures } = req.body;
       // 1) Verify Issuer-signed SD-JWT
       const { payload: vc, protectedHeader } =
-        await jwtVerify(credential, signingKey.publicKey);
+        await jwtVerify(credential, issuerPubKey);
       // 2) Check disclosures against vc._sd digests
       if (!Array.isArray(vc._sd)) throw new Error("sd_missing");
 
@@ -256,7 +253,7 @@ async function main(){
        alg:"ES256",
        typ:"openid4vci-proof+jwt",
        jwk: holderPubJwk
-     }).sign(holderKey.privateKey);
+     }).sign(holderPrivKey);
     
      const vc = await fetch(`${offer.credential_issuer}/credential`,{
        method:"POST",
