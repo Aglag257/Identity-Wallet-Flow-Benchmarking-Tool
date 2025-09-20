@@ -213,6 +213,12 @@ async function startIssuer(port=ISSUER_PORT){
     }
   });
 
+  /*  JSON error handler */
+  app.use((err, _req, res, _next) => {
+    console.error("[issuer] unhandled:", err && (err.stack || err));
+    if (res.headersSent) return;
+    res.status(500).json({ error: String(err?.message || err) });
+  });
   app.use((req,res)=>res.status(404).json({error:"not_found", path:req.url, method:req.method}));
 
   return new Promise((ok)=>app.listen(port,BIND,()=>{
@@ -261,6 +267,12 @@ async function startVerifier(port=VERIFIER_PORT){
     }
   });
 
+  /*  JSON error handler */
+  app.use((err, _req, res, _next) => {
+    console.error("[verifier] unhandled:", err && (err.stack || err));
+    if (res.headersSent) return;
+    res.status(500).json({ error: String(err?.message || err) });
+  });
   app.use((req,res)=>res.status(404).json({error:"not_found", path:req.url, method:req.method}));
 
   return new Promise((ok)=>app.listen(port,BIND,()=>{
@@ -409,6 +421,12 @@ async function startWallet(port=WALLET_PORT){
     }
   });
 
+  /*  JSON error handler  */
+  app.use((err, _req, res, _next) => {
+    console.error("[wallet] unhandled:", err && (err.stack || err));
+    if (res.headersSent) return;
+    res.status(500).json({ error: String(err?.message || err) });
+  });
   app.use((req,res)=>res.status(404).json({error:"not_found", path:req.url, method:req.method}));
 
   return new Promise((ok)=>app.listen(port,BIND,()=>{
