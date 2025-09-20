@@ -274,134 +274,139 @@ async function startWallet(port=WALLET_PORT){
   const app = express().use(express.json());
 
   app.post("/run", async (_q,res)=>{
-    const t0 = performance.now(), cpu0 = process.cpuUsage();
-    const attrCount   = Math.max(4, Number(_q.body?.attrCount ?? 5));
-    const revealRatio = Math.min(1, Math.max(0, Number(_q.body?.revealRatio ?? 0.2)));
+    try {
+      const t0 = performance.now(), cpu0 = process.cpuUsage();
+      const attrCount   = Math.max(4, Number(_q.body?.attrCount ?? 5));
+      const revealRatio = Math.min(1, Math.max(0, Number(_q.body?.revealRatio ?? 0.2)));
 
 
-    // 1) Offer
-    const offer = await getJSON(url(ISSUER_PORT, "/credential-offer"));
-    const code = offer.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"]["pre-authorized_code"];
+      // 1) Offer
+      const offer = await getJSON(url(ISSUER_PORT, "/credential-offer"));
+      const code = offer.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"]["pre-authorized_code"];
 
-    // 2) Token
-    const { access_token } = await getJSON(url(ISSUER_PORT, "/token"),{
-      method:"POST", headers:{ "content-type":"application/json" },
-      body:JSON.stringify({ grant_type:"urn:ietf:params:oauth:grant-type:pre-authorized_code", "pre-authorized_code":code })
-    });
+      // 2) Token
+      const { access_token } = await getJSON(url(ISSUER_PORT, "/token"),{
+        method:"POST", headers:{ "content-type":"application/json" },
+        body:JSON.stringify({ grant_type:"urn:ietf:params:oauth:grant-type:pre-authorized_code", "pre-authorized_code":code })
+      });
 
-    // 3) Issuer Nonce (c_nonce)
-    const { c_nonce } = await getJSON(url(ISSUER_PORT, "/nonce"),{method:"POST"});
+      // 3) Issuer Nonce (c_nonce)
+      const { c_nonce } = await getJSON(url(ISSUER_PORT, "/nonce"),{method:"POST"});
 
 
-    // 4) Minimal attestation proof (JWT) — includes c_nonce
-    // const { privateKey } = await joseGenKP("ES256");
-    const { publicKey: holderPub, privateKey: holderPriv } = await joseGenKP("ES256");
-    const holderPubJwk = await exportJWK(holderPub);
+      // 4) Minimal attestation proof (JWT) — includes c_nonce
+      // const { privateKey } = await joseGenKP("ES256");
+      const { publicKey: holderPub, privateKey: holderPriv } = await joseGenKP("ES256");
+      const holderPubJwk = await exportJWK(holderPub);
 
-    const attJws = await new SignJWT({
-      aud: offer.credential_issuer,
-      nonce: c_nonce,
-      iat: Math.floor(Date.now()/1000),
-      exp: Math.floor(Date.now()/1000)+120
-    })
-    .setProtectedHeader({
-      alg: "ES256",
-      typ: "openid4vci-proof+jwt",
-      jwk: holderPubJwk
-    })
-    .sign(holderPriv);
-
-    // 5) Credential request
-    const credRes = await getJSON(url(ISSUER_PORT, "/credential"),{
-      method:"POST",
-      headers:{ "content-type":"application/json", Authorization:`Bearer ${access_token}` },
-      body:JSON.stringify({
-        proofs:{ jwt:[attJws] },
-        c_nonce,
-        attr_count: attrCount
+      const attJws = await new SignJWT({
+        aud: offer.credential_issuer,
+        nonce: c_nonce,
+        iat: Math.floor(Date.now()/1000),
+        exp: Math.floor(Date.now()/1000)+120
       })
-    });
+      .setProtectedHeader({
+        alg: "ES256",
+        typ: "openid4vci-proof+jwt",
+        jwk: holderPubJwk
+      })
+      .sign(holderPriv);
 
-    // 6) Build unlinkable VP with BBS derived proof (dynamic attrs, reveal %)
-    const vc = credRes.credential;
-    const base = credRes.base_proof;
-    const issuerPublicKey = fromB64(base.publicKey);
-    const signature = fromB64(base.signature);
+      // 5) Credential request
+      const credRes = await getJSON(url(ISSUER_PORT, "/credential"),{
+        method:"POST",
+        headers:{ "content-type":"application/json", Authorization:`Bearer ${access_token}` },
+        body:JSON.stringify({
+          proofs:{ jwt:[attJws] },
+          c_nonce,
+          attr_count: attrCount
+        })
+      });
 
-    const orderedPairs = [];
-    const cs = vc.credentialSubject;
+      // 6) Build unlinkable VP with BBS derived proof (dynamic attrs, reveal %)
+      const vc = credRes.credential;
+      const base = credRes.base_proof;
+      const issuerPublicKey = fromB64(base.publicKey);
+      const signature = fromB64(base.signature);
 
-    const canonical = ["givenName","familyName","degree","gpa"];
-    for (const k of canonical) if (k in cs) orderedPairs.push([k, cs[k]]);
+      const orderedPairs = [];
+      const cs = vc.credentialSubject;
 
-    let i = 5;
-    while (true) {
-      const k = `attr_${i}`;
-      if (!(k in cs)) break;
-      orderedPairs.push([k, cs[k]]);
-      i++;
-    }
+      const canonical = ["givenName","familyName","degree","gpa"];
+      for (const k of canonical) if (k in cs) orderedPairs.push([k, cs[k]]);
 
-    const msgs = [
-      vc.issuer,
-      cs.seed,
-      ...orderedPairs.map(([_, v]) => v)
-    ].map(toBytes);
-
-    if ((base?.messages | 0) !== msgs.length) {
-      throw new Error(`message count mismatch: signed ${base?.messages}, have ${msgs.length}`);
-    }
-
-    const totalAttrs = orderedPairs.length;
-    const k = Math.max(0, Math.min(totalAttrs, Math.floor(revealRatio * totalAttrs)));
-
-    // Indices in the BBS message vector: 0=issuer, 1=seed, attributes start at index 2
-    const reveal = Array.from({ length: k }, (_, j) => 2 + j);
-
-    const { nonce } = await getJSON(url(VERIFIER_PORT, "/nonce"));
-    const proof = await blsCreateProof({
-      signature, publicKey: issuerPublicKey, messages: msgs,
-      nonce: fromB64url(nonce), revealed: reveal
-    });
-
-    const vp_token = {
-      nonce,
-      issuerPublicKey: base.publicKey,
-      revealed: reveal.map(i=>({ idx:i, val: Buffer.from(msgs[i]).toString() })),
-      proof: b64(proof)
-    };
-
-    const body = JSON.stringify({ vp_token });
-    M.payload.push(Buffer.byteLength(body));
-
-    const ok = await getJSON(url(VERIFIER_PORT, "/verify"),{
-      method:"POST", headers:{ "content-type":"application/json" }, body
-    });
-
-    const { user, system } = process.cpuUsage(cpu0);
-    M.wallet.t.push(performance.now()-t0);
-    M.wallet.cpu.push((user + system) / 1000);
-
-    writeRow({
-      type: "run",
-      impl: IMPL_NAME,
-      attrCount,
-      revealRatio,
-      metrics: {
-        issuer_ms:   last(M.issuer.t),
-        wallet_ms:   last(M.wallet.t),
-        verifier_ms: last(M.verifier.t),
-
-        issuer_cpu_ms:   last(M.issuer.cpu),
-        wallet_cpu_ms:   last(M.wallet.cpu),
-        verifier_cpu_ms: last(M.verifier.cpu),
-
-        payload_present_bytes: last(M.payload),
-        vc_size_bytes:         last(M.vcBytes)
+      let i = 5;
+      while (true) {
+        const k = `attr_${i}`;
+        if (!(k in cs)) break;
+        orderedPairs.push([k, cs[k]]);
+        i++;
       }
-    });
 
-    res.json({ verified: ok.verified, vcBytes: JSON.stringify(credRes).length });
+      const msgs = [
+        vc.issuer,
+        cs.seed,
+        ...orderedPairs.map(([_, v]) => v)
+      ].map(toBytes);
+
+      if ((base?.messages | 0) !== msgs.length) {
+        throw new Error(`message count mismatch: signed ${base?.messages}, have ${msgs.length}`);
+      }
+
+      const totalAttrs = orderedPairs.length;
+      const k = Math.max(0, Math.min(totalAttrs, Math.floor(revealRatio * totalAttrs)));
+
+      // Indices in the BBS message vector: 0=issuer, 1=seed, attributes start at index 2
+      const reveal = Array.from({ length: k }, (_, j) => 2 + j);
+
+      const { nonce } = await getJSON(url(VERIFIER_PORT, "/nonce"));
+      const proof = await blsCreateProof({
+        signature, publicKey: issuerPublicKey, messages: msgs,
+        nonce: fromB64url(nonce), revealed: reveal
+      });
+
+      const vp_token = {
+        nonce,
+        issuerPublicKey: base.publicKey,
+        revealed: reveal.map(i=>({ idx:i, val: Buffer.from(msgs[i]).toString() })),
+        proof: b64(proof)
+      };
+
+      const body = JSON.stringify({ vp_token });
+      M.payload.push(Buffer.byteLength(body));
+
+      const ok = await getJSON(url(VERIFIER_PORT, "/verify"),{
+        method:"POST", headers:{ "content-type":"application/json" }, body
+      });
+
+      const { user, system } = process.cpuUsage(cpu0);
+      M.wallet.t.push(performance.now()-t0);
+      M.wallet.cpu.push((user + system) / 1000);
+
+      writeRow({
+        type: "run",
+        impl: IMPL_NAME,
+        attrCount,
+        revealRatio,
+        metrics: {
+          issuer_ms:   last(M.issuer.t),
+          wallet_ms:   last(M.wallet.t),
+          verifier_ms: last(M.verifier.t),
+
+          issuer_cpu_ms:   last(M.issuer.cpu),
+          wallet_cpu_ms:   last(M.wallet.cpu),
+          verifier_cpu_ms: last(M.verifier.cpu),
+
+          payload_present_bytes: last(M.payload),
+          vc_size_bytes:         last(M.vcBytes)
+        }
+      });
+
+      res.json({ verified: ok.verified, vcBytes: JSON.stringify(credRes).length });
+    } catch (e) {
+      console.error("[/run] error:", e && (e.stack || e));
+      res.status(500).json({ verified: false, error: String(e?.message || e) });
+    }
   });
 
   app.use((req,res)=>res.status(404).json({error:"not_found", path:req.url, method:req.method}));
