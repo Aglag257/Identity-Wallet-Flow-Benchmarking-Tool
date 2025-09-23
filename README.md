@@ -61,6 +61,7 @@ node --experimental-permission --allow-fs-read=* --allow-fs-write=* --allow-work
 
 pip install pandas numpy matplotlib
 python3 plot.py --dir ./<results folder> --out <plots folder>
+python3 plot.py --dir ./results_official --out paper_plots
 ```
 
 ## Quick start (Android / Termux)
@@ -113,5 +114,4 @@ These choices keep the comparison focused on:
 
 * Token exchanges and proofs mandated by each format/profile,
 * The **selective disclosure** mechanics (disclosure lists vs BBS derived proofs),
-* Holder binding (e.g., **KB-JWT** PoP for SD-JWT VC).
 
