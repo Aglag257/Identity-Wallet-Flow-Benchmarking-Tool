@@ -62,6 +62,8 @@ node --experimental-permission --allow-fs-read=* --allow-fs-write=* --allow-work
 pip install pandas numpy matplotlib
 python3 plot.py --dir ./<results folder> --out <plots folder>
 python3 plot.py --dir ./results_official --out paper_plots
+python plot.py --dir ./multi_device_results --out multi_device_plots
+
 ```
 
 ## Quick start (Android / Termux)
