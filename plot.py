@@ -10,8 +10,67 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 
+from matplotlib.lines import Line2D
+import csv
+
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
+
+DEVICE_SUFFIXES = {
+    "mobile": "mobile",
+    "raspberry_pi": "raspberry_pi",
+    "raspberrypi": "raspberry_pi",
+    "pi": "raspberry_pi",
+}
+
+IMPL_ORDER   = ["jwt-legacy", "json-bbs-plus", "bbs2023-pairing-crypto", "bbs2023-digitalbazaar"]
+DEVICE_ORDER = ["desktop", "mobile", "raspberry_pi"]
+
+
+def split_impl_name(full: str) -> tuple[str, str]:
+    s = (full or "").strip().replace(" ", "").replace("__", "_").replace("--", "-").lower()
+    for suf in ["_mobile", "-mobile", "_raspberry_pi", "-raspberry_pi", "_raspberrypi", "-raspberrypi", "_pi", "-pi"]:
+        if s.endswith(suf):
+            base = s[: -len(suf)]
+            dev  = DEVICE_SUFFIXES.get(suf.strip("_-"), "desktop")
+            return base, dev
+    return s, "desktop"
+
+def normalize_base_impl(base: str) -> str:
+    b = base.lower()
+    if b in {"legacyjwt", "jwt-legacy", "jwtlegacy"}:
+        return "jwt-legacy"
+    if b in {"bbsplus", "json-bbs-plus", "jsonbbsplus"}:
+        return "json-bbs-plus"
+    if b in {"bbsreviseddigitalbazar", "bbs2023-digitalbazaar", "bbs2023-digitalbazar"}:
+        return "bbs2023-digitalbazaar"
+    if b in {"bbsrevisedrust", "bbs2023-pairing-crypto", "bbs2023-rust"}:
+        return "bbs2023-pairing-crypto"
+    return b
+
+COLOR_BY_IMPL = {
+    "jwt-legacy":             "#d62728", 
+    "json-bbs-plus":          "#2ca02c", 
+    "bbs2023-pairing-crypto": "#ff7f0e", 
+    "bbs2023-digitalbazaar":  "#1f77b4",  
+    "bbs-plus":               "#9467bd",
+}
+
+# BW-friendly marker per *base implementation*
+MARKER_BY_IMPL = {
+    "jwt-legacy":             "s",  # square
+    "json-bbs-plus":          "^",  # triangle up
+    "bbs2023-pairing-crypto": "D",  # diamond
+    "bbs2023-digitalbazaar":  "v",  # triangle down
+    "bbs-plus":               "X",
+}
+
+# Line style by *device*
+LINESTYLE_BY_DEVICE = {
+    "desktop":      "-",
+    "mobile":       "--",
+    "raspberry_pi": ":",
+}
 
 
 def find_inputs(args) -> List[Path]:
@@ -223,47 +282,83 @@ def plot_line_with_err(
     const_value,
     x: str,
     group: str = "impl",
+    show_legend: bool = True,
 ) -> Tuple[Figure, str] | None:
     m_mean = f"{metric}_mean"
     m_std  = f"{metric}_std"
     if facet_by not in df_sum.columns:
         return None
 
-    sub = df_sum[df_sum[facet_by].eq(const_value)].dropna(subset=[m_mean])
+    sub = df_sum[df_sum[facet_by].eq(const_value)].dropna(subset=[m_mean]).copy()
     if sub.empty:
         return None
 
-    sub = sub.sort_values(by=[x, group])
+    bases, devs = [], []
+    for v in sub[group].astype(str):
+        raw_base, dev = split_impl_name(v)
+        base = normalize_base_impl(raw_base)
+        bases.append(base)
+        devs.append(dev)
+    sub["_base_impl"] = bases
+    sub["_device"] = devs
+
+    # deterministic ordering: by base impl then device, then x
+    sub.sort_values(by=["_base_impl", "_device", x], inplace=True)
 
     fig, ax = plt.subplots(figsize=(6.0, 4.0), dpi=150)
 
-    for impl, part in sub.groupby(group):
+    for (base_impl, device), part in sub.groupby(["_base_impl", "_device"], sort=False):
+        color  = COLOR_BY_IMPL.get(base_impl, "#7f7f7f")
+        marker = MARKER_BY_IMPL.get(base_impl, "o")
+        ls     = LINESTYLE_BY_DEVICE.get(device, "-")
+
         X = part[x].to_numpy(dtype=float)
         Y = part[m_mean].to_numpy(dtype=float)
 
-        Yerr = None
-        if m_std in part.columns and part.get(f"{metric}_count", pd.Series([0]*len(part))).fillna(0).astype(int).min() >= 2:
-            Yerr = part[m_std].to_numpy(dtype=float)
+        yerr = None
+        if m_std in part.columns:
+            counts = part.get(f"{metric}_count")
+            if counts is not None and (counts.fillna(0).astype(int) >= 2).any():
+                yerr = part[m_std].to_numpy(dtype=float)
 
-        if Yerr is not None and np.isfinite(Yerr).any():
-            ax.errorbar(X, Y, yerr=Yerr, marker='o', capsize=3, label=str(impl))
+        label = f"{base_impl}_{device}"
+
+        if yerr is not None and np.isfinite(yerr).any():
+            ax.errorbar(
+                X, Y, yerr=yerr, marker=marker, linestyle=ls, capsize=3,
+                label=label, color=color, markersize=5, linewidth=1.5,
+            )
         else:
-            ax.plot(X, Y, marker='o', label=str(impl))
+            ax.plot(
+                X, Y, marker=marker, linestyle=ls,
+                label=label, color=color, markersize=5, linewidth=1.5,
+            )
 
     ax.set_xlabel(x if x != "revealRatio" else "Reveal ratio")
     ax.set_ylabel(title_metric_name(metric))
+
+    # log-scale only for time/CPU metrics
+    if metric.endswith("_ms") or metric in {"e2e_ms", "issuer_cpu_ms", "wallet_cpu_ms", "verifier_cpu_ms"}:
+        ax.set_yscale("log")
+
     if facet_by == "attrCount":
         ax.set_title(f"{title_metric_name(metric)} vs Reveal — attrCount={const_value}")
     else:
-        ax.set_title(f"{title_metric_name(metric)} vs AttrCount — reveal={const_value:.2f}")
-    ax.legend()
+        try:
+            ax.set_title(f"{title_metric_name(metric)} vs AttrCount — reveal={float(const_value):.2f}")
+        except Exception:
+            ax.set_title(f"{title_metric_name(metric)} vs AttrCount — reveal={const_value}")
+
+    if show_legend:
+        ax.legend(frameon=False, fontsize=8, ncol=1)
+
     fig.tight_layout()
 
     name = f"{metric}_vs_{'reveal' if x=='revealRatio' else 'attrCount'}_{facet_by}{const_value}"
     return fig, name
 
 
-def plot_all(df_sum: pd.DataFrame) -> List[Tuple[Figure, str]]:
+def plot_all(df_sum: pd.DataFrame, show_legend: bool) -> List[Tuple[Figure, str]]:
     figs: List[Tuple[Figure, str]] = []
     metrics_present = sorted(set(k.split("_mean")[0] for k in df_sum.columns if k.endswith("_mean")))
     have_iwv = all(f"{m}_mean" in df_sum.columns for m in ("issuer_ms","wallet_ms","verifier_ms"))
@@ -276,7 +371,7 @@ def plot_all(df_sum: pd.DataFrame) -> List[Tuple[Figure, str]]:
         if "revealRatio" not in df_sum.columns: 
             continue
         for ac in sorted(df_sum["attrCount"].dropna().unique().astype(int)):
-            res = plot_line_with_err(df_sum, m, facet_by="attrCount", const_value=ac, x="revealRatio")
+            res = plot_line_with_err(df_sum, m, facet_by="attrCount", const_value=ac, x="revealRatio", show_legend=show_legend)
             if res:
                 figs.append(res)
 
@@ -285,7 +380,7 @@ def plot_all(df_sum: pd.DataFrame) -> List[Tuple[Figure, str]]:
         reveals = sorted(df_sum["revealRatio"].dropna().unique())
         for m in metrics_present:
             for rv in reveals:
-                res = plot_line_with_err(df_sum, m, facet_by="revealRatio", const_value=rv, x="attrCount")
+                res = plot_line_with_err(df_sum, m, facet_by="revealRatio", const_value=rv, x="attrCount", show_legend=show_legend)
                 if res:
                     figs.append(res)
 
@@ -307,6 +402,47 @@ def write_csv_tables(df_sum: pd.DataFrame, outdir: Path):
             pass
 
 
+
+def _present_impl_device_pairs(df_sum: pd.DataFrame) -> list[tuple[str, str]]:
+    pairs: set[tuple[str, str]] = set()
+    for impl in df_sum["impl"].astype(str).unique():
+        base_raw, dev = split_impl_name(impl)
+        base = normalize_base_impl(base_raw)
+        pairs.add((base, dev))
+    def _impl_rank(b):   return IMPL_ORDER.index(b)   if b in IMPL_ORDER   else 999
+    def _dev_rank(d):    return DEVICE_ORDER.index(d) if d in DEVICE_ORDER else 999
+    return sorted(pairs, key=lambda t: (_impl_rank(t[0]), _dev_rank(t[1]), t[0], t[1]))
+
+def save_style_legend(outdir: Path, df_sum: pd.DataFrame, ncols: int = 2):
+    pairs = _present_impl_device_pairs(df_sum)
+    handles, labels = [], []
+    for base, dev in pairs:
+        color  = COLOR_BY_IMPL.get(base, "#7f7f7f")
+        marker = MARKER_BY_IMPL.get(base, "o")
+        ls     = LINESTYLE_BY_DEVICE.get(dev, "-")
+        handles.append(Line2D([0],[0], color=color, marker=marker, linestyle=ls,
+                              linewidth=1.8, markersize=6))
+        labels.append(f"{base}_{dev}")
+
+    fig_h = 2 + 0.18 * max(1, (len(handles) + ncols - 1) // ncols)
+    fig, ax = plt.subplots(figsize=(7.2, fig_h), dpi=150)
+    ax.axis("off")
+    ax.legend(handles, labels, loc="center", frameon=False, ncol=ncols, columnspacing=1.2, handletextpad=0.8)
+    fig.tight_layout()
+    fig.savefig(outdir / "style_legend.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+    with open(outdir / "style_legend.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["label", "base_impl", "device", "color_hex", "marker", "linestyle"])
+        for base, dev in pairs:
+            w.writerow([
+                f"{base}_{dev}", base, dev,
+                COLOR_BY_IMPL.get(base, "#7f7f7f"),
+                MARKER_BY_IMPL.get(base, "o"),
+                LINESTYLE_BY_DEVICE.get(dev, "-"),
+            ])
+
 #  Main 
 
 def main():
@@ -316,8 +452,15 @@ def main():
     ap.add_argument("--out", default="paper_plots", help="Output directory for plots & tables")
     ap.add_argument("--save-individual-pdfs", action="store_true",
                     help="Also save each plot as its own vector PDF file")
+    ap.add_argument(
+        "--legend", choices=["external", "inline", "none"], default="external",
+        help="Where to place the legend. 'external' saves a separate legend PDF/CSV; "
+            "'inline' draws legends on each plot; 'none' omits legends."
+    )
+
     args = ap.parse_args()
 
+    legend_mode = args.legend
     inputs = find_inputs(args)
     outdir = Path(args.out).resolve()
     ensure_out_dir(outdir)
@@ -334,7 +477,8 @@ def main():
     if not df_runs.empty:
         df_runs.to_csv(outdir / "runs_only.csv", index=False)
 
-    figs = plot_all(df_sum)
+    figs = plot_all(df_sum, show_legend=(legend_mode == "inline"))
+
     print(f"[i] Prepared {len(figs)} plots (vector)")
 
     # bundle multi-page PDF directly from figures (vector)
@@ -352,6 +496,10 @@ def main():
 
     write_csv_tables(df_sum, outdir)
     print(f"[i] Tables saved in {outdir}")
+    
+    if legend_mode == "external":
+        save_style_legend(outdir, df_sum, ncols=2)
+
 
 
 if __name__ == "__main__":
