@@ -323,16 +323,10 @@ def plot_line_with_err(
 
         label = f"{base_impl}_{device}"
 
-        if yerr is not None and np.isfinite(yerr).any():
-            ax.errorbar(
-                X, Y, yerr=yerr, marker=marker, linestyle=ls, capsize=3,
-                label=label, color=color, markersize=5, linewidth=1.5,
-            )
-        else:
-            ax.plot(
-                X, Y, marker=marker, linestyle=ls,
-                label=label, color=color, markersize=5, linewidth=1.5,
-            )
+        ax.plot(
+            X, Y, marker=marker, linestyle=ls,
+            label=label, color=color, markersize=5, linewidth=1.5,
+        )
 
     ax.set_xlabel(x if x != "revealRatio" else "Reveal ratio")
     ax.set_ylabel(title_metric_name(metric))
