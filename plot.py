@@ -21,15 +21,16 @@ DEVICE_SUFFIXES = {
     "raspberry_pi": "raspberry_pi",
     "raspberrypi": "raspberry_pi",
     "pi": "raspberry_pi",
+    "watch": "smartwatch",
 }
 
 IMPL_ORDER   = ["jwt-legacy", "json-bbs-plus", "bbs2023-pairing-crypto", "bbs2023-digitalbazaar"]
-DEVICE_ORDER = ["desktop", "mobile", "raspberry_pi"]
+DEVICE_ORDER = ["desktop", "mobile", "raspberry_pi", "watch"]
 
 
 def split_impl_name(full: str) -> tuple[str, str]:
     s = (full or "").strip().replace(" ", "").replace("__", "_").replace("--", "-").lower()
-    for suf in ["_mobile", "-mobile", "_raspberry_pi", "-raspberry_pi", "_raspberrypi", "-raspberrypi", "_pi", "-pi"]:
+    for suf in ["_mobile", "-mobile", "_raspberry_pi", "-raspberry_pi", "_raspberrypi", "-raspberrypi", "_pi", "-pi", "_watch", "-watch"]:
         if s.endswith(suf):
             base = s[: -len(suf)]
             dev  = DEVICE_SUFFIXES.get(suf.strip("_-"), "desktop")
@@ -44,7 +45,7 @@ def normalize_base_impl(base: str) -> str:
         return "json-bbs-plus"
     if b in {"bbsreviseddigitalbazar", "bbs2023-digitalbazaar", "bbs2023-digitalbazar"}:
         return "bbs2023-digitalbazaar"
-    if b in {"bbsrevisedrust", "bbs2023-pairing-crypto", "bbs2023-rust"}:
+    if b in {"bbsrevisedrust", "bbs2023-pairing-crypto", "bbs2023-rust", "bbs2023-pairing-crypto2", "bbs2023-rust2" }:
         return "bbs2023-pairing-crypto"
     return b
 
@@ -70,6 +71,7 @@ LINESTYLE_BY_DEVICE = {
     "desktop":      "-",
     "mobile":       "--",
     "raspberry_pi": ":",
+    "smartwatch":   "-.",
 }
 
 

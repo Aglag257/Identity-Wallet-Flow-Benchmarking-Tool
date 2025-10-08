@@ -1,0 +1,17 @@
+label,base_impl,device,color_hex,marker,linestyle
+jwt-legacy_desktop,jwt-legacy,desktop,#d62728,s,-
+jwt-legacy_mobile,jwt-legacy,mobile,#d62728,s,--
+jwt-legacy_raspberry_pi,jwt-legacy,raspberry_pi,#d62728,s,:
+jwt-legacy_smartwatch,jwt-legacy,smartwatch,#d62728,s,-.
+json-bbs-plus_desktop,json-bbs-plus,desktop,#2ca02c,^,-
+json-bbs-plus_mobile,json-bbs-plus,mobile,#2ca02c,^,--
+json-bbs-plus_raspberry_pi,json-bbs-plus,raspberry_pi,#2ca02c,^,:
+json-bbs-plus_smartwatch,json-bbs-plus,smartwatch,#2ca02c,^,-.
+bbs2023-pairing-crypto_desktop,bbs2023-pairing-crypto,desktop,#ff7f0e,D,-
+bbs2023-pairing-crypto_mobile,bbs2023-pairing-crypto,mobile,#ff7f0e,D,--
+bbs2023-pairing-crypto_raspberry_pi,bbs2023-pairing-crypto,raspberry_pi,#ff7f0e,D,:
+bbs2023-pairing-crypto_smartwatch,bbs2023-pairing-crypto,smartwatch,#ff7f0e,D,-.
+bbs2023-digitalbazaar_desktop,bbs2023-digitalbazaar,desktop,#1f77b4,v,-
+bbs2023-digitalbazaar_mobile,bbs2023-digitalbazaar,mobile,#1f77b4,v,--
+bbs2023-digitalbazaar_raspberry_pi,bbs2023-digitalbazaar,raspberry_pi,#1f77b4,v,:
+bbs2023-digitalbazaar_smartwatch,bbs2023-digitalbazaar,smartwatch,#1f77b4,v,-.
