@@ -1,9 +1,0 @@
-label,base_impl,device,color_hex,marker,linestyle
-jwt-legacy_mobile,jwt-legacy,mobile,#d62728,s,--
-jwt-legacy_mobile2,jwt-legacy,mobile2,#d62728,s,"(0, (5, 2))"
-json-bbs-plus_mobile,json-bbs-plus,mobile,#2ca02c,^,--
-json-bbs-plus_mobile2,json-bbs-plus,mobile2,#2ca02c,^,"(0, (5, 2))"
-bbs2023-pairing-crypto_mobile,bbs2023-pairing-crypto,mobile,#ff7f0e,D,--
-bbs2023-pairing-crypto_mobile2,bbs2023-pairing-crypto,mobile2,#ff7f0e,D,"(0, (5, 2))"
-bbs2023-digitalbazaar_mobile,bbs2023-digitalbazaar,mobile,#1f77b4,v,--
-bbs2023-digitalbazaar_mobile2,bbs2023-digitalbazaar,mobile2,#1f77b4,v,"(0, (5, 2))"

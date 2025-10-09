@@ -25,7 +25,7 @@ DEVICE_SUFFIXES = {
     "watch": "smartwatch",
 }
 
-IMPL_ORDER   = ["jwt-legacy", "json-bbs-plus", "bbs2023-pairing-crypto", "bbs2023-digitalbazaar"]
+IMPL_ORDER = ["sd-jwt", "bbs+(Rust)", "bbs2023(Rust)", "bbs2023(JS)"]
 DEVICE_ORDER = ["desktop", "mobile", "mobile2", "raspberry_pi", "watch"]
 
 
@@ -41,30 +41,28 @@ def split_impl_name(full: str) -> tuple[str, str]:
 def normalize_base_impl(base: str) -> str:
     b = base.lower()
     if b in {"legacyjwt", "jwt-legacy", "jwtlegacy"}:
-        return "jwt-legacy"
+        return "sd-jwt"
     if b in {"bbsplus", "json-bbs-plus", "jsonbbsplus"}:
-        return "json-bbs-plus"
+        return "bbs+(Rust)"
     if b in {"bbsreviseddigitalbazar", "bbs2023-digitalbazaar", "bbs2023-digitalbazar"}:
-        return "bbs2023-digitalbazaar"
+        return "bbs2023(JS)"
     if b in {"bbsrevisedrust", "bbs2023-pairing-crypto", "bbs2023-rust", "bbs2023-pairing-crypto2", "bbs2023-rust2" }:
-        return "bbs2023-pairing-crypto"
+        return "bbs2023(Rust)"
     return b
 
 COLOR_BY_IMPL = {
-    "jwt-legacy":             "#d62728", 
-    "json-bbs-plus":          "#2ca02c", 
-    "bbs2023-pairing-crypto": "#ff7f0e", 
-    "bbs2023-digitalbazaar":  "#1f77b4",  
-    "bbs-plus":               "#9467bd",
+    "sd-jwt":            "#d62728", 
+    "bbs+(Rust)":          "#2ca02c", 
+    "bbs2023(Rust)": "#ff7f0e", 
+    "bbs2023(JS)":  "#1f77b4",  
 }
 
 # BW-friendly marker per *base implementation*
 MARKER_BY_IMPL = {
-    "jwt-legacy":             "s",  # square
-    "json-bbs-plus":          "^",  # triangle up
-    "bbs2023-pairing-crypto": "D",  # diamond
-    "bbs2023-digitalbazaar":  "v",  # triangle down
-    "bbs-plus":               "X",
+    "sd-jwt":             "s",  # square
+    "bbs+(Rust)":          "^",  # triangle up
+    "bbs2023(Rust)": "D",  # diamond
+    "bbs2023(JS)":  "v",  # triangle down
 }
 
 # Line style by *device*
