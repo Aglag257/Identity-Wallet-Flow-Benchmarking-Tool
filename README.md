@@ -64,6 +64,11 @@ python3 plot.py --dir ./<results folder> --out <plots folder>
 python3 plot.py --dir ./results_official --out paper_plots
 python plot.py --dir ./multi_device_results --out multi_device_plots_new
 python plot.py --dir ./mobile_comparison --out mobile_comparison
+
+python table_creator.py --dir ./multi_device_results --slice-attr max --slice-reveals 0.8 --out ./4devices --latex
+
+
+python filtered_table.py --dir ./multi_device_results --out ./4devices --reveal 0.80 --attr-min 5 --attr-max 10 --latex
 ```
 
 ## Quick start (Android / Termux)

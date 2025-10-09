@@ -18,11 +18,11 @@ import pandas as pd
 import numpy as np
 
 # -------- naming helpers (same logic as your plot script) ----------
-DEVICE_SUFFIXES = {"mobile":"mobile","raspberry_pi":"raspberry_pi","raspberrypi":"raspberry_pi","pi":"raspberry_pi"}
+DEVICE_SUFFIXES = {"mobile":"mobile","raspberry_pi":"raspberry_pi","raspberrypi":"raspberry_pi","pi":"raspberry_pi", "watch":"smartwatch"}
 
 def split_impl_name(full: str) -> tuple[str, str]:
     s = (full or "").strip().replace(" ", "").replace("__", "_").replace("--", "-").lower()
-    for suf in ["_mobile","-mobile","_raspberry_pi","-raspberry_pi","_raspberrypi","-raspberrypi","_pi","-pi"]:
+    for suf in ["_mobile","-mobile","_raspberry_pi","-raspberry_pi","_raspberrypi","-raspberrypi","_pi","-pi", "_watch", "-watch"]:
         if s.endswith(suf):
             base = s[: -len(suf)]
             dev  = DEVICE_SUFFIXES.get(suf.strip("_-"), "desktop")
@@ -181,7 +181,7 @@ def make_wide(g: pd.DataFrame) -> pd.DataFrame:
     # Order columns
     cols = ["base_impl","attrCount","revealRatio"]
     for metric in ["wallet_ms","verifier_ms"]:
-        for dev in ["desktop","mobile","raspberry_pi"]:
+        for dev in ["desktop","mobile","raspberry_pi", "smartwatch"]:
             col = f"{dev}_{metric}"
             if col in pivot.columns: cols.append(col)
     for c in pivot.columns:
@@ -201,7 +201,7 @@ def filter_and_save(wide: pd.DataFrame, outdir: Path, reveal: float, amin: int, 
     # Keep only wallet/verifier columns (across devices)
     keep = ["base_impl","attrCount","revealRatio"]
     for metric in ["wallet_ms","verifier_ms"]:
-        for dev in ["desktop","mobile","raspberry_pi"]:
+        for dev in ["desktop","mobile","raspberry_pi", "smartwatch"]:
             col = f"{dev}_{metric}"
             if col in sl.columns: keep.append(col)
     sl = sl[keep].sort_values(by=["attrCount","base_impl"])
