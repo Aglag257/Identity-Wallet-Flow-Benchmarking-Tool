@@ -63,7 +63,7 @@ pip install pandas numpy matplotlib
 python3 plot.py --dir ./<results folder> --out <plots folder>
 python3 plot.py --dir ./results_official --out paper_plots
 python plot.py --dir ./multi_device_results --out multi_device_plots_new
-
+python plot.py --dir ./mobile_comparison --out mobile_comparison
 ```
 
 ## Quick start (Android / Termux)

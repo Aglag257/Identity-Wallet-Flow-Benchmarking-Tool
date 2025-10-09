@@ -18,6 +18,7 @@ plt.rcParams['ps.fonttype'] = 42
 
 DEVICE_SUFFIXES = {
     "mobile": "mobile",
+    "mobile2": "mobile2",
     "raspberry_pi": "raspberry_pi",
     "raspberrypi": "raspberry_pi",
     "pi": "raspberry_pi",
@@ -25,12 +26,12 @@ DEVICE_SUFFIXES = {
 }
 
 IMPL_ORDER   = ["jwt-legacy", "json-bbs-plus", "bbs2023-pairing-crypto", "bbs2023-digitalbazaar"]
-DEVICE_ORDER = ["desktop", "mobile", "raspberry_pi", "watch"]
+DEVICE_ORDER = ["desktop", "mobile", "mobile2", "raspberry_pi", "watch"]
 
 
 def split_impl_name(full: str) -> tuple[str, str]:
     s = (full or "").strip().replace(" ", "").replace("__", "_").replace("--", "-").lower()
-    for suf in ["_mobile", "-mobile", "_raspberry_pi", "-raspberry_pi", "_raspberrypi", "-raspberrypi", "_pi", "-pi", "_watch", "-watch"]:
+    for suf in ["_mobile", "-mobile", "-mobile2", "_mobile2", "_raspberry_pi", "-raspberry_pi", "_raspberrypi", "-raspberrypi", "_pi", "-pi", "_watch", "-watch"]:
         if s.endswith(suf):
             base = s[: -len(suf)]
             dev  = DEVICE_SUFFIXES.get(suf.strip("_-"), "desktop")
@@ -70,6 +71,7 @@ MARKER_BY_IMPL = {
 LINESTYLE_BY_DEVICE = {
     "desktop":      "-",
     "mobile":       "--",
+    "mobile2":      (0, (5, 2)),
     "raspberry_pi": ":",
     "smartwatch":   "-.",
 }
