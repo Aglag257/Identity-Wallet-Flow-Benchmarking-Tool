@@ -1,0 +1,17 @@
+label,base_impl,device,color_hex,marker,linestyle
+sd-jwt_desktop,sd-jwt,desktop,#d62728,s,-
+sd-jwt_mobile,sd-jwt,mobile,#d62728,s,--
+sd-jwt_raspberry_pi,sd-jwt,raspberry_pi,#d62728,s,:
+sd-jwt_smartwatch,sd-jwt,smartwatch,#d62728,s,-.
+bbs+(Rust)_desktop,bbs+(Rust),desktop,#2ca02c,^,-
+bbs+(Rust)_mobile,bbs+(Rust),mobile,#2ca02c,^,--
+bbs+(Rust)_raspberry_pi,bbs+(Rust),raspberry_pi,#2ca02c,^,:
+bbs+(Rust)_smartwatch,bbs+(Rust),smartwatch,#2ca02c,^,-.
+bbs2023(Rust)_desktop,bbs2023(Rust),desktop,#ff7f0e,D,-
+bbs2023(Rust)_mobile,bbs2023(Rust),mobile,#ff7f0e,D,--
+bbs2023(Rust)_raspberry_pi,bbs2023(Rust),raspberry_pi,#ff7f0e,D,:
+bbs2023(Rust)_smartwatch,bbs2023(Rust),smartwatch,#ff7f0e,D,-.
+bbs2023(JS)_desktop,bbs2023(JS),desktop,#1f77b4,v,-
+bbs2023(JS)_mobile,bbs2023(JS),mobile,#1f77b4,v,--
+bbs2023(JS)_raspberry_pi,bbs2023(JS),raspberry_pi,#1f77b4,v,:
+bbs2023(JS)_smartwatch,bbs2023(JS),smartwatch,#1f77b4,v,-.

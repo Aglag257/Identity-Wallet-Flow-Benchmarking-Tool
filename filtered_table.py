@@ -31,14 +31,14 @@ def split_impl_name(full: str) -> tuple[str, str]:
 
 def normalize_base_impl(base: str) -> str:
     b = (base or "").lower()
-    if b in {"legacyjwt","jwt-legacy","jwtlegacy"}:
-        return "jwt-legacy"
-    if b in {"bbsplus","json-bbs-plus","jsonbbsplus"}:
-        return "json-bbs-plus"
-    if b in {"bbsreviseddigitalbazar","bbs2023-digitalbazaar","bbs2023-digitalbazar"}:
-        return "bbs2023-digitalbazaar"
-    if b in {"bbsrevisedrust","bbs2023-pairing-crypto","bbs2023-rust"}:
-        return "bbs2023-pairing-crypto"
+    if b in {"legacyjwt", "jwt-legacy", "jwtlegacy"}:
+        return "sd-jwt"
+    if b in {"bbsplus", "json-bbs-plus", "jsonbbsplus"}:
+        return "bbs+(Rust)"
+    if b in {"bbsreviseddigitalbazar", "bbs2023-digitalbazaar", "bbs2023-digitalbazar"}:
+        return "bbs2023(JS)"
+    if b in {"bbsrevisedrust", "bbs2023-pairing-crypto", "bbs2023-rust", "bbs2023-pairing-crypto2", "bbs2023-rust2" }:
+        return "bbs2023(Rust)"
     return b
 
 # -------------------- IO --------------------
