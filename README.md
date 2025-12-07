@@ -1,7 +1,5 @@
 # Identity Wallet Flow Benchmarking Tool
 
-(THIS IS NOT FULLY READY YET - SOME PARTS (IN THE DOCKERIZATION MIGHT NOT FULLY WORK ATM))
-
 
 This is a benchmarking tool, that compares different crypto operations for different implementations of common digital-identity credential flows. This is not a production wallet/issuer/verifier. As a result, we intentionally relax or omit several protocol features that either don’t change computational cost, or they create bloat and noise for the benchmarking purpose of this tool, which is to compare the cryptographic operations (details below).
 
