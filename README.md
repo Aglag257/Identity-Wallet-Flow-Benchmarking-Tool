@@ -62,6 +62,8 @@ python3 plot.py --dir ./<results folder> --out <plots folder>
 python3 plot.py --dir ./results_official --out paper_plots
 python plot.py --dir ./multi_device_results --out multi_device_plots_paper
 python plot.py --dir ./mobile_comparison --out mobile_comparison
+python plot.py --dir ./results_official --out single_device_new_clean
+
 
 python table_creator.py --dir ./multi_device_results --slice-attr max --slice-reveals 0.8 --out ./4devices --latex
 

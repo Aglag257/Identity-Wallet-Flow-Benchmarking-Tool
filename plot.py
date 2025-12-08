@@ -323,7 +323,7 @@ def plot_line_with_err(
             if counts is not None and (counts.fillna(0).astype(int) >= 2).any():
                 yerr = part[m_std].to_numpy(dtype=float)
 
-        label = f"{base_impl}_{device}"
+        label = f"{base_impl}"
 
         ax.plot(
             X, Y, marker=marker, linestyle=ls,
@@ -338,12 +338,9 @@ def plot_line_with_err(
         ax.set_yscale("log")
 
     if facet_by == "attrCount":
-        ax.set_title(f"{title_metric_name(metric)} vs Reveal — attrCount={const_value}")
+        ax.set_title(f"{title_metric_name(metric)} vs Reveal")
     else:
-        try:
-            ax.set_title(f"{title_metric_name(metric)} vs AttrCount — reveal={float(const_value):.2f}")
-        except Exception:
-            ax.set_title(f"{title_metric_name(metric)} vs AttrCount — reveal={const_value}")
+        ax.set_title(f"{title_metric_name(metric)} vs AttrCount")
 
     if show_legend:
         ax.legend(frameon=False, fontsize=8, ncol=1)
